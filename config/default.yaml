@@ -1,0 +1,134 @@
+name: ORB_Confluence_Default
+version: "1.0"
+
+# Instrument definitions (proxy mode for free data)
+instruments:
+  SPY:
+    symbol: ES  # Target futures symbol
+    proxy_symbol: SPY  # ETF proxy for development
+    data_source: yahoo
+    session_mode: rth
+    session_start: "08:30:00"
+    session_end: "15:00:00"
+    timezone: America/Chicago
+    tick_size: 0.01
+    point_value: 1.0  # Simplified for ETF
+    enabled: true
+  
+  QQQ:
+    symbol: NQ
+    proxy_symbol: QQQ
+    data_source: yahoo
+    session_mode: rth
+    session_start: "08:30:00"
+    session_end: "15:00:00"
+    timezone: America/Chicago
+    tick_size: 0.01
+    point_value: 1.0
+    enabled: false  # Enable for multi-instrument testing
+
+# Opening Range configuration
+orb:
+  base_minutes: 15
+  adaptive: true
+  low_norm_vol: 0.35
+  high_norm_vol: 0.85
+  short_or_minutes: 10
+  long_or_minutes: 30
+  atr_period: 14
+  intraday_atr_timeframe: "5min"
+  daily_atr_timeframe: "1day"
+  enable_validity_filter: true
+  min_atr_mult: 0.25
+  max_atr_mult: 1.75
+
+# Breakout buffers
+buffers:
+  fixed: 0.10  # $0.10 for SPY (adjust per instrument)
+  use_atr: false
+  atr_mult: 0.05
+
+# Factor configurations
+factors:
+  rel_volume:
+    enabled: true
+    lookback: 20
+    spike_mult: 1.25
+  
+  price_action:
+    enabled: true
+    pivot_len: 3
+    enable_engulfing: true
+    enable_structure: true
+  
+  profile_proxy:
+    enabled: true
+    val_pct: 0.25
+    vah_pct: 0.75
+  
+  vwap:
+    enabled: false
+    reset_mode: session
+  
+  adx:
+    enabled: false
+    period: 14
+    threshold: 18.0
+
+# Confluence scoring
+scoring:
+  enabled: true
+  base_required: 2  # Require 2+ factors
+  weak_trend_required: 3  # Require 3+ in weak trend
+  weights:
+    price_action: 1.0
+    rel_vol: 1.0
+    profile: 1.0
+    vwap: 1.0
+    adx: 1.0
+
+# Trade management
+trade:
+  stop_mode: or_opposite
+  extra_stop_buffer: 0.05
+  atr_stop_cap_mult: 0.80
+  
+  # Partial targets
+  partials: true
+  t1_r: 1.0
+  t1_pct: 0.5
+  t2_r: 1.5
+  t2_pct: 0.25
+  runner_r: 2.0
+  
+  # Single target (when partials=false)
+  primary_r: 1.5
+  
+  # Breakeven
+  move_be_at_r: 1.0
+  be_buffer: 0.01
+
+# Governance and discipline
+governance:
+  max_signals_per_day: 3
+  lockout_after_losses: 2
+  time_cutoff: "13:30:00"  # No entries after 1:30 PM CT
+  second_chance_minutes: 30
+  flatten_at_session_end: true
+
+# Backtest parameters
+backtest:
+  start_date: "2024-01-01"
+  end_date: "2024-03-31"
+  initial_capital: 100000.0
+  contracts_per_trade: 1
+  conservative_fills: true
+  random_seed: 42
+  output_dir: runs
+  save_factor_matrix: true
+  save_trades: true
+  save_equity_curve: true
+
+# Logging
+log_level: INFO
+log_to_file: true

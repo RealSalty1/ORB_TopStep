@@ -1,0 +1,51 @@
+buffer:
+  base_points: 1.0
+  max_buffer: 2.5
+  min_buffer: 0.8
+  volatility_scalar: 0.25
+context:
+  correlation_instruments: []
+  correlation_weight: 0.0
+  typical_adr: 20.0
+display_name: Gold
+or:
+  base_minutes: 20
+  high_vol_threshold: 0.85
+  low_vol_threshold: 0.35
+  max_minutes: 30
+  min_minutes: 20
+session_end: '12:30'
+session_start: 07:20
+sizing:
+  preferred_contract: MGC
+  scale_to_mini_at_r: 6.0
+stop:
+  atr_cap_mult: 1.0
+  max_risk_r: 1.5999999999999999
+  min_points: 4.0
+symbol: GC
+targets:
+  runner_r: 4.5
+  runner_trail_mode: structure
+  t1_fraction: 0.6
+  t1_r: 1.3
+  t2_fraction: 0.4
+  t2_r: 3.0
+tick_size: 0.1
+tick_value: 10.0
+tick_value_micro: 1.0
+time_stop:
+  enabled: false
+  min_progress_r: 0.4
+  minutes: 60
+validity:
+  max_width_norm: 7.0
+  max_width_points: 30.0
+  min_width_norm: 0.22
+  min_width_points: 2.0
+volume:
+  cum_ratio_max: 5.0
+  cum_ratio_min: 0.5
+  min_drive_energy: 0.25
+  spike_threshold_mult: 4.0
+yahoo_symbol: GC=F

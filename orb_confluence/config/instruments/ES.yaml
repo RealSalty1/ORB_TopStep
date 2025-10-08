@@ -1,0 +1,53 @@
+buffer:
+  base_points: 0.75
+  max_buffer: 2.0
+  min_buffer: 0.5
+  volatility_scalar: 0.25
+context:
+  correlation_instruments:
+  - NQ
+  correlation_weight: 0.5
+  typical_adr: 45.0
+display_name: E-mini S&P 500
+or:
+  base_minutes: 15
+  high_vol_threshold: 0.85
+  low_vol_threshold: 0.35
+  max_minutes: 20
+  min_minutes: 10
+session_end: '15:00'
+session_start: 08:30
+sizing:
+  preferred_contract: MES
+  scale_to_mini_at_r: 5.0
+stop:
+  atr_cap_mult: 1.0
+  max_risk_r: 1.4  # OPTIMIZED: 1.4R max risk
+  min_points: 3.0
+symbol: ES
+targets:
+  runner_r: 4.5
+  runner_trail_mode: structure
+  t1_fraction: 0.6  # OPTIMIZED Round 1: 60% off at T1
+  t1_r: 1.0  # OPTIMIZED Round 1: Best performer
+  t2_fraction: 0.3  # Remaining 30% at T2  
+  t2_r: 3.0  # OPTIMIZED Round 1
+  # Round 1: -0.219R expectancy, $-291 P/L, 58.2% WR
+tick_size: 0.25
+tick_value: 12.5
+tick_value_micro: 1.25
+time_stop:
+  enabled: false
+  min_progress_r: 0.4
+  minutes: 60
+validity:
+  max_width_norm: 8.0
+  max_width_points: 25.0
+  min_width_norm: 0.18
+  min_width_points: 2.0
+volume:
+  cum_ratio_max: 5.0
+  cum_ratio_min: 0.5
+  min_drive_energy: 0.25
+  spike_threshold_mult: 4.0
+yahoo_symbol: ES=F

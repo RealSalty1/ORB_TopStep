@@ -1,0 +1,73 @@
+[tool.poetry]
+name = "orb-confluence"
+version = "0.1.0"
+description = "Opening Range Breakout strategy with multi-factor confluence (free track)"
+authors = ["Nick Burner"]
+readme = "README.md"
+packages = [{include = "orb_confluence"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pandas = "^2.2.0"
+numpy = "^1.26.0"
+numba = "^0.59.0"
+pyarrow = "^15.0.0"
+polars = {version = "^0.20.0", optional = true}
+pydantic = "^2.6.0"
+ruamel-yaml = "^0.18.6"
+plotly = "^5.18.0"
+loguru = "^0.7.2"
+optuna = "^3.5.0"
+jinja2 = "^3.1.3"
+yfinance = "^0.2.36"
+requests = "^2.31.0"
+python-dateutil = "^2.8.2"
+rich = "^13.7.0"
+streamlit = {version = "^1.31.0", optional = true}
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+pytest-cov = "^4.1.0"
+hypothesis = "^6.98.0"
+black = "^24.1.0"
+ruff = "^0.2.0"
+mypy = "^1.8.0"
+ipython = "^8.20.0"
+
+[tool.poetry.extras]
+polars = ["polars"]
+streamlit = ["streamlit"]
+
+[tool.poetry.scripts]
+orb-backtest = "orb_confluence.backtest.event_loop:main"
+orb-viz = "orb_confluence.viz.streamlit_app:main"
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["orb_confluence/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --cov=orb_confluence --cov-report=html --cov-report=term"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

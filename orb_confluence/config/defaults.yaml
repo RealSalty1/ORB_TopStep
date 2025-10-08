@@ -1,0 +1,96 @@
+name: ORB_Confluence_Free
+version: "1.0"
+
+# Instrument definitions (proxy mode for free data)
+instruments:
+  SPY:
+    symbol: ES
+    proxy_symbol: SPY
+    data_source: yahoo
+    session_mode: rth
+    session_start: "08:30:00"
+    session_end: "15:00:00"
+    timezone: America/Chicago
+    tick_size: 0.01
+    point_value: 1.0
+    enabled: true
+
+# Opening Range configuration
+orb:
+  base_minutes: 15
+  adaptive: true
+  low_norm_vol: 0.35
+  high_norm_vol: 0.85
+  short_or_minutes: 10
+  long_or_minutes: 30
+  atr_period: 14
+  enable_validity_filter: true
+  min_atr_mult: 0.25
+  max_atr_mult: 1.75
+
+# Buffer configuration
+buffers:
+  fixed: 2.0
+  atr_mult: 0.05
+  use_atr: false
+
+# Factor configurations
+factors:
+  rel_volume:
+    enabled: true
+    lookback: 20
+    spike_mult: 1.25
+  price_action:
+    enabled: true
+    pivot_len: 3
+  profile_proxy:
+    enabled: true
+  vwap:
+    enabled: false
+  adx:
+    enabled: false
+    period: 14
+    threshold: 18.0
+
+# Confluence scoring
+scoring:
+  enabled: true
+  base_required: 2
+  weak_trend_required: 3
+  weights:
+    price_action: 1.0
+    rel_vol: 1.0
+    profile: 1.0
+    vwap: 1.0
+    adx: 1.0
+
+# Trade management
+trade:
+  stop_mode: or_opposite
+  extra_stop_buffer: 0.05
+  partials: true
+  t1_r: 1.0
+  t1_pct: 0.5
+  t2_r: 1.5
+  t2_pct: 0.25
+  runner_r: 2.0
+  move_be_at_r: 1.0
+  be_buffer: 0.01
+
+# Governance
+governance:
+  max_signals_per_day: 3
+  lockout_after_losses: 2
+  time_cutoff: "13:30:00"
+  second_chance_minutes: 30
+  flatten_at_session_end: true
+
+# Backtest parameters
+backtest:
+  start_date: "2024-01-01"
+  end_date: "2024-03-31"
+  initial_capital: 100000.0
+  random_seed: 42
+
+# Logging
+log_level: INFO

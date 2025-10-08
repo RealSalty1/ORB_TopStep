@@ -1,0 +1,93 @@
+name: ORB_Aggressive
+version: "1.0"
+
+# More aggressive variant - lower score requirements, wider targets
+
+instruments:
+  SPY:
+    symbol: ES
+    proxy_symbol: SPY
+    data_source: yahoo
+    session_mode: rth
+    session_start: "08:30:00"
+    session_end: "15:00:00"
+    timezone: America/Chicago
+    tick_size: 0.01
+    point_value: 1.0
+    enabled: true
+
+orb:
+  base_minutes: 10  # Shorter OR for faster signals
+  adaptive: false
+  enable_validity_filter: true
+  min_atr_mult: 0.15  # Allow narrower ORs
+  max_atr_mult: 2.0
+
+buffers:
+  fixed: 0.05  # Tighter buffer
+  use_atr: false
+
+factors:
+  rel_volume:
+    enabled: true
+    lookback: 15
+    spike_mult: 1.15  # Lower volume threshold
+  
+  price_action:
+    enabled: true
+    pivot_len: 3
+    enable_engulfing: true
+    enable_structure: true
+  
+  profile_proxy:
+    enabled: false  # Disable for more signals
+  
+  vwap:
+    enabled: false
+  
+  adx:
+    enabled: false
+
+scoring:
+  enabled: true
+  base_required: 1  # Only need 1 factor
+  weak_trend_required: 2
+  weights:
+    price_action: 1.0
+    rel_vol: 1.0
+
+trade:
+  stop_mode: or_opposite
+  extra_stop_buffer: 0.03
+  
+  partials: true
+  t1_r: 1.0
+  t1_pct: 0.3  # Take less profit early
+  t2_r: 2.0
+  t2_pct: 0.3
+  runner_r: 3.0  # Bigger runner target
+  
+  move_be_at_r: 1.0
+  be_buffer: 0.01
+
+governance:
+  max_signals_per_day: 5  # More signals allowed
+  lockout_after_losses: 3
+  time_cutoff: "14:00:00"  # Later cutoff
+  second_chance_minutes: 45
+  flatten_at_session_end: true
+
+backtest:
+  start_date: "2024-01-01"
+  end_date: "2024-03-31"
+  initial_capital: 100000.0
+  contracts_per_trade: 1
+  conservative_fills: true
+  random_seed: 42
+  output_dir: runs
+  save_factor_matrix: false
+  save_trades: true
+  save_equity_curve: true
+
+log_level: INFO
+log_to_file: true

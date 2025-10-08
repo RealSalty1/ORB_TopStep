@@ -1,0 +1,523 @@
+{
+  "instrument": "ES",
+  "optimization": "profitability_round2",
+  "best_params": {
+    "t1_r": 1.2,
+    "t1_fraction": 0.5,
+    "t2_r": 4.0,
+    "breakeven_r": 0.5,
+    "max_stop_r": 1.2
+  },
+  "best_value": -0.26878531073446416,
+  "best_metrics": {
+    "total_r": -95.15000000000032,
+    "pnl": -356.8125,
+    "win_rate": 53.954802259887,
+    "num_trades": 354,
+    "avg_winner_r": 0.5267015706806272,
+    "avg_loser_r": -1.2009202453987728,
+    "rr_ratio": 0.4385816399537279
+  },
+  "all_trials": [
+    {
+      "number": 0,
+      "params": {
+        "t1_r": 1.5,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.7,
+        "max_stop_r": 1.2
+      },
+      "value": -0.269774011299435,
+      "metrics": {
+        "total_r": -95.49999999999999,
+        "pnl": -358.125,
+        "win_rate": 51.69491525423729,
+        "num_trades": 354,
+        "avg_winner_r": 0.553734061930783,
+        "avg_loser_r": -1.1510721247563356,
+        "rr_ratio": 0.48105939673241593
+      }
+    },
+    {
+      "number": 1,
+      "params": {
+        "t1_r": 1.2,
+        "t1_fraction": 0.3,
+        "t2_r": 4.0,
+        "breakeven_r": 0.7,
+        "max_stop_r": 1.6
+      },
+      "value": -0.312401129943503,
+      "metrics": {
+        "total_r": -110.59000000000006,
+        "pnl": -414.71249999999884,
+        "win_rate": 53.954802259887,
+        "num_trades": 354,
+        "avg_winner_r": 0.44586387434554936,
+        "avg_loser_r": -1.2009202453987728,
+        "rr_ratio": 0.3712685135035737
+      }
+    },
+    {
+      "number": 2,
+      "params": {
+        "t1_r": 1.2,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.5,
+        "max_stop_r": 1.2
+      },
+      "value": -0.26878531073446416,
+      "metrics": {
+        "total_r": -95.15000000000032,
+        "pnl": -356.8125,
+        "win_rate": 53.954802259887,
+        "num_trades": 354,
+        "avg_winner_r": 0.5267015706806272,
+        "avg_loser_r": -1.2009202453987728,
+        "rr_ratio": 0.4385816399537279
+      }
+    },
+    {
+      "number": 3,
+      "params": {
+        "t1_r": 1.2,
+        "t1_fraction": 0.3,
+        "t2_r": 3.5,
+        "breakeven_r": 0.6,
+        "max_stop_r": 1.2
+      },
+      "value": -0.3143785310734465,
+      "metrics": {
+        "total_r": -111.29000000000006,
+        "pnl": -417.33749999999884,
+        "win_rate": 53.954802259887,
+        "num_trades": 354,
+        "avg_winner_r": 0.44219895287958083,
+        "avg_loser_r": -1.2009202453987728,
+        "rr_ratio": 0.3682167525893828
+      }
+    },
+    {
+      "number": 4,
+      "params": {
+        "t1_r": 2.0999999999999996,
+        "t1_fraction": 0.3,
+        "t2_r": 3.0,
+        "breakeven_r": 0.6,
+        "max_stop_r": 1.4
+      },
+      "value": -0.3234463276836162,
+      "metrics": {
+        "total_r": -114.50000000000013,
+        "pnl": -429.3749999999997,
+        "win_rate": 49.717514124293785,
+        "num_trades": 354,
+        "avg_winner_r": 0.4749053030303026,
+        "avg_loser_r": -1.1128277153558053,
+        "rr_ratio": 0.42675545951734384
+      }
+    },
+    {
+      "number": 5,
+      "params": {
+        "t1_r": 2.0999999999999996,
+        "t1_fraction": 0.3,
+        "t2_r": 3.5,
+        "breakeven_r": 0.7,
+        "max_stop_r": 1.2
+      },
+      "value": -0.3214689265536727,
+      "metrics": {
+        "total_r": -113.80000000000014,
+        "pnl": -426.7499999999997,
+        "win_rate": 49.717514124293785,
+        "num_trades": 354,
+        "avg_winner_r": 0.4788825757575754,
+        "avg_loser_r": -1.1128277153558053,
+        "rr_ratio": 0.4303294833059239
+      }
+    },
+    {
+      "number": 6,
+      "params": {
+        "t1_r": 2.0999999999999996,
+        "t1_fraction": 0.3,
+        "t2_r": 3.0,
+        "breakeven_r": 0.8,
+        "max_stop_r": 1.6
+      },
+      "value": -0.3234463276836162,
+      "metrics": {
+        "total_r": -114.50000000000013,
+        "pnl": -429.3749999999997,
+        "win_rate": 49.717514124293785,
+        "num_trades": 354,
+        "avg_winner_r": 0.4749053030303026,
+        "avg_loser_r": -1.1128277153558053,
+        "rr_ratio": 0.42675545951734384
+      }
+    },
+    {
+      "number": 7,
+      "params": {
+        "t1_r": 2.4,
+        "t1_fraction": 0.3,
+        "t2_r": 3.0,
+        "breakeven_r": 0.7,
+        "max_stop_r": 1.4
+      },
+      "value": -0.3036346516007535,
+      "metrics": {
+        "total_r": -107.48666666666674,
+        "pnl": -403.0750000000002,
+        "win_rate": 49.717514124293785,
+        "num_trades": 354,
+        "avg_winner_r": 0.5052840909090907,
+        "avg_loser_r": -1.1034644194756553,
+        "rr_ratio": 0.4579070081382341
+      }
+    },
+    {
+      "number": 8,
+      "params": {
+        "t1_r": 1.2,
+        "t1_fraction": 0.4,
+        "t2_r": 3.0,
+        "breakeven_r": 0.8,
+        "max_stop_r": 1.2
+      },
+      "value": -0.2939830508474572,
+      "metrics": {
+        "total_r": -104.06999999999984,
+        "pnl": -390.2624999999994,
+        "win_rate": 53.954802259887,
+        "num_trades": 354,
+        "avg_winner_r": 0.4800000000000002,
+        "avg_loser_r": -1.2009202453987728,
+        "rr_ratio": 0.39969348659003856
+      }
+    },
+    {
+      "number": 9,
+      "params": {
+        "t1_r": 2.0999999999999996,
+        "t1_fraction": 0.3,
+        "t2_r": 3.5,
+        "breakeven_r": 0.7,
+        "max_stop_r": 1.2
+      },
+      "value": -0.3214689265536727,
+      "metrics": {
+        "total_r": -113.80000000000014,
+        "pnl": -426.7499999999997,
+        "win_rate": 49.717514124293785,
+        "num_trades": 354,
+        "avg_winner_r": 0.4788825757575754,
+        "avg_loser_r": -1.1128277153558053,
+        "rr_ratio": 0.4303294833059239
+      }
+    },
+    {
+      "number": 10,
+      "params": {
+        "t1_r": 1.5,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.5,
+        "max_stop_r": 1.4
+      },
+      "value": -0.269774011299435,
+      "metrics": {
+        "total_r": -95.49999999999999,
+        "pnl": -358.125,
+        "win_rate": 51.69491525423729,
+        "num_trades": 354,
+        "avg_winner_r": 0.553734061930783,
+        "avg_loser_r": -1.1510721247563356,
+        "rr_ratio": 0.48105939673241593
+      }
+    },
+    {
+      "number": 11,
+      "params": {
+        "t1_r": 1.5,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.5,
+        "max_stop_r": 1.2
+      },
+      "value": -0.269774011299435,
+      "metrics": {
+        "total_r": -95.49999999999999,
+        "pnl": -358.125,
+        "win_rate": 51.69491525423729,
+        "num_trades": 354,
+        "avg_winner_r": 0.553734061930783,
+        "avg_loser_r": -1.1510721247563356,
+        "rr_ratio": 0.48105939673241593
+      }
+    },
+    {
+      "number": 12,
+      "params": {
+        "t1_r": 1.5,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.6,
+        "max_stop_r": 1.2
+      },
+      "value": -0.269774011299435,
+      "metrics": {
+        "total_r": -95.49999999999999,
+        "pnl": -358.125,
+        "win_rate": 51.69491525423729,
+        "num_trades": 354,
+        "avg_winner_r": 0.553734061930783,
+        "avg_loser_r": -1.1510721247563356,
+        "rr_ratio": 0.48105939673241593
+      }
+    },
+    {
+      "number": 13,
+      "params": {
+        "t1_r": 1.5,
+        "t1_fraction": 0.4,
+        "t2_r": 4.0,
+        "breakeven_r": 0.5,
+        "max_stop_r": 1.4
+      },
+      "value": -0.29124293785310795,
+      "metrics": {
+        "total_r": -103.10000000000021,
+        "pnl": -386.625,
+        "win_rate": 51.69491525423729,
+        "num_trades": 354,
+        "avg_winner_r": 0.5122040072859736,
+        "avg_loser_r": -1.1510721247563356,
+        "rr_ratio": 0.44497994197748414
+      }
+    },
+    {
+      "number": 14,
+      "params": {
+        "t1_r": 1.7999999999999998,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.6,
+        "max_stop_r": 1.2
+      },
+      "value": -0.2770715630885117,
+      "metrics": {
+        "total_r": -98.08333333333316,
+        "pnl": -367.8125,
+        "win_rate": 50.0,
+        "num_trades": 354,
+        "avg_winner_r": 0.5607344632768365,
+        "avg_loser_r": -1.114877589453861,
+        "rr_ratio": 0.5029560810810813
+      }
+    },
+    {
+      "number": 15,
+      "params": {
+        "t1_r": 1.7999999999999998,
+        "t1_fraction": 0.4,
+        "t2_r": 3.5,
+        "breakeven_r": 0.8,
+        "max_stop_r": 1.4
+      },
+      "value": -0.2993879472693033,
+      "metrics": {
+        "total_r": -105.98333333333336,
+        "pnl": -397.43750000000034,
+        "win_rate": 50.0,
+        "num_trades": 354,
+        "avg_winner_r": 0.5161016949152538,
+        "avg_loser_r": -1.114877589453861,
+        "rr_ratio": 0.4629222972972968
+      }
+    },
+    {
+      "number": 16,
+      "params": {
+        "t1_r": 1.2,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.5,
+        "max_stop_r": 1.2
+      },
+      "value": -0.26878531073446416,
+      "metrics": {
+        "total_r": -95.15000000000032,
+        "pnl": -356.8125,
+        "win_rate": 53.954802259887,
+        "num_trades": 354,
+        "avg_winner_r": 0.5267015706806272,
+        "avg_loser_r": -1.2009202453987728,
+        "rr_ratio": 0.4385816399537279
+      }
+    },
+    {
+      "number": 17,
+      "params": {
+        "t1_r": 1.2,
+        "t1_fraction": 0.5,
+        "t2_r": 3.5,
+        "breakeven_r": 0.5,
+        "max_stop_r": 1.6
+      },
+      "value": -0.27019774011299524,
+      "metrics": {
+        "total_r": -95.65000000000032,
+        "pnl": -358.6875,
+        "win_rate": 53.954802259887,
+        "num_trades": 354,
+        "avg_winner_r": 0.5240837696335068,
+        "avg_loser_r": -1.2009202453987728,
+        "rr_ratio": 0.43640181072930584
+      }
+    },
+    {
+      "number": 18,
+      "params": {
+        "t1_r": 1.2,
+        "t1_fraction": 0.4,
+        "t2_r": 4.0,
+        "breakeven_r": 0.5,
+        "max_stop_r": 1.2
+      },
+      "value": -0.2905932203389826,
+      "metrics": {
+        "total_r": -102.86999999999983,
+        "pnl": -385.7624999999994,
+        "win_rate": 53.954802259887,
+        "num_trades": 354,
+        "avg_winner_r": 0.4862827225130892,
+        "avg_loser_r": -1.2009202453987728,
+        "rr_ratio": 0.4049250767286516
+      }
+    },
+    {
+      "number": 19,
+      "params": {
+        "t1_r": 1.7999999999999998,
+        "t1_fraction": 0.4,
+        "t2_r": 3.5,
+        "breakeven_r": 0.5,
+        "max_stop_r": 1.4
+      },
+      "value": -0.2993879472693033,
+      "metrics": {
+        "total_r": -105.98333333333336,
+        "pnl": -397.43750000000034,
+        "win_rate": 50.0,
+        "num_trades": 354,
+        "avg_winner_r": 0.5161016949152538,
+        "avg_loser_r": -1.114877589453861,
+        "rr_ratio": 0.4629222972972968
+      }
+    },
+    {
+      "number": 20,
+      "params": {
+        "t1_r": 1.2,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.6,
+        "max_stop_r": 1.2
+      },
+      "value": -0.26878531073446416,
+      "metrics": {
+        "total_r": -95.15000000000032,
+        "pnl": -356.8125,
+        "win_rate": 53.954802259887,
+        "num_trades": 354,
+        "avg_winner_r": 0.5267015706806272,
+        "avg_loser_r": -1.2009202453987728,
+        "rr_ratio": 0.4385816399537279
+      }
+    },
+    {
+      "number": 21,
+      "params": {
+        "t1_r": 1.2,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.6,
+        "max_stop_r": 1.2
+      },
+      "value": -0.26878531073446416,
+      "metrics": {
+        "total_r": -95.15000000000032,
+        "pnl": -356.8125,
+        "win_rate": 53.954802259887,
+        "num_trades": 354,
+        "avg_winner_r": 0.5267015706806272,
+        "avg_loser_r": -1.2009202453987728,
+        "rr_ratio": 0.4385816399537279
+      }
+    },
+    {
+      "number": 22,
+      "params": {
+        "t1_r": 1.2,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.5,
+        "max_stop_r": 1.2
+      },
+      "value": -0.26878531073446416,
+      "metrics": {
+        "total_r": -95.15000000000032,
+        "pnl": -356.8125,
+        "win_rate": 53.954802259887,
+        "num_trades": 354,
+        "avg_winner_r": 0.5267015706806272,
+        "avg_loser_r": -1.2009202453987728,
+        "rr_ratio": 0.4385816399537279
+      }
+    },
+    {
+      "number": 23,
+      "params": {
+        "t1_r": 1.5,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.6,
+        "max_stop_r": 1.2
+      },
+      "value": -0.269774011299435,
+      "metrics": {
+        "total_r": -95.49999999999999,
+        "pnl": -358.125,
+        "win_rate": 51.69491525423729,
+        "num_trades": 354,
+        "avg_winner_r": 0.553734061930783,
+        "avg_loser_r": -1.1510721247563356,
+        "rr_ratio": 0.48105939673241593
+      }
+    },
+    {
+      "number": 24,
+      "params": {
+        "t1_r": 1.2,
+        "t1_fraction": 0.5,
+        "t2_r": 4.0,
+        "breakeven_r": 0.5,
+        "max_stop_r": 1.2
+      },
+      "value": -0.26878531073446416,
+      "metrics": {
+        "total_r": -95.15000000000032,
+        "pnl": -356.8125,
+        "win_rate": 53.954802259887,
+        "num_trades": 354,
+        "avg_winner_r": 0.5267015706806272,
+        "avg_loser_r": -1.2009202453987728,
+        "rr_ratio": 0.4385816399537279
+      }
+    }
+  ]
+}

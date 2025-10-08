@@ -1,0 +1,102 @@
+name: ORB_Conservative
+version: "1.0"
+
+# More conservative variant - higher score requirements, tighter targets, more factors
+
+instruments:
+  SPY:
+    symbol: ES
+    proxy_symbol: SPY
+    data_source: yahoo
+    session_mode: rth
+    session_start: "08:30:00"
+    session_end: "15:00:00"
+    timezone: America/Chicago
+    tick_size: 0.01
+    point_value: 1.0
+    enabled: true
+
+orb:
+  base_minutes: 30  # Longer OR for better formation
+  adaptive: false
+  enable_validity_filter: true
+  min_atr_mult: 0.40  # Stricter validity
+  max_atr_mult: 1.50
+
+buffers:
+  fixed: 0.15  # Wider buffer
+  use_atr: true
+  atr_mult: 0.10
+
+factors:
+  rel_volume:
+    enabled: true
+    lookback: 20
+    spike_mult: 1.5  # Need strong volume
+  
+  price_action:
+    enabled: true
+    pivot_len: 5  # Longer pivot
+    enable_engulfing: true
+    enable_structure: true
+  
+  profile_proxy:
+    enabled: true  # Add value area filter
+    val_pct: 0.25
+    vah_pct: 0.75
+  
+  vwap:
+    enabled: true  # Add VWAP alignment
+    reset_mode: session
+  
+  adx:
+    enabled: true  # Add trend filter
+    period: 14
+    threshold: 20.0
+
+scoring:
+  enabled: true
+  base_required: 4  # Need 4+ factors
+  weak_trend_required: 5  # Very strict in weak trend
+  weights:
+    price_action: 1.0
+    rel_vol: 1.0
+    profile: 1.0
+    vwap: 1.0
+    adx: 1.0
+
+trade:
+  stop_mode: or_opposite
+  extra_stop_buffer: 0.10
+  
+  partials: true
+  t1_r: 0.75  # Take profit earlier
+  t1_pct: 0.5
+  t2_r: 1.25
+  t2_pct: 0.30
+  runner_r: 1.75  # Conservative runner
+  
+  move_be_at_r: 0.75  # Move BE earlier
+  be_buffer: 0.02
+
+governance:
+  max_signals_per_day: 2  # Very selective
+  lockout_after_losses: 1  # Lock after 1 loss
+  time_cutoff: "12:30:00"  # Early cutoff
+  second_chance_minutes: 20
+  flatten_at_session_end: true
+
+backtest:
+  start_date: "2024-01-01"
+  end_date: "2024-03-31"
+  initial_capital: 100000.0
+  contracts_per_trade: 1
+  conservative_fills: true
+  random_seed: 42
+  output_dir: runs
+  save_factor_matrix: true  # Save for analysis
+  save_trades: true
+  save_equity_curve: true
+
+log_level: INFO
+log_to_file: true

@@ -1,0 +1,74 @@
+# Crude Oil Futures Configuration
+symbol: CL
+display_name: "Crude Oil"
+yahoo_symbol: "CL=F"
+
+# Contract specifications
+tick_size: 0.01
+tick_value: 10.00  # Full contract
+tick_value_micro: 1.00  # MCL
+
+# Trading session (Central Time)
+session_start: "08:00"
+session_end: "13:30"
+
+# Opening Range parameters
+or:
+  base_minutes: 15
+  min_minutes: 15
+  max_minutes: 30
+  low_vol_threshold: 0.35
+  high_vol_threshold: 0.85
+
+# OR Validity
+validity:
+  min_width_norm: 0.22  # More tolerant
+  max_width_norm: 6.0  # Relaxed from 1.2 (typical market ORs are 4.2-4.4)
+  min_width_points: 0.15
+  max_width_points: 3.0
+
+# Breakout buffer
+buffer:
+  base_points: 0.15  # 15 ticks
+  volatility_scalar: 0.25
+  min_buffer: 0.10
+  max_buffer: 0.40
+
+# Stop parameters
+stop:
+  min_points: 0.25  # Avoid micro noise
+  max_risk_r: 1.4
+  atr_cap_mult: 1.0  # Sweet spot between 0.8 and 1.2
+
+# Target parameters
+targets:
+  t1_r: 0.6  # Optimized from 1.0 (more achievable)
+  t1_fraction: 0.40
+  t2_r: 1.2  # Optimized from 1.8
+  t2_fraction: 0.40
+  runner_r: 2.5  # Optimized from 3.2
+  runner_trail_mode: "volatility"  # News-driven
+
+# Time stop
+time_stop:
+  enabled: false  # Disabled - was killing trades prematurely
+  minutes: 60  # Extended if re-enabled
+  min_progress_r: 0.4
+
+# Volume (Goldilocks) - More lenient for news spikes
+volume:
+  cum_ratio_min: 0.50  # Relaxed from 0.80 (allow quieter ORs)
+  cum_ratio_max: 5.0   # Relaxed from 1.50 (allow volatile ORs)
+  spike_threshold_mult: 4.0  # Relaxed from 2.5 (allow larger spikes)
+  min_drive_energy: 0.25  # Relaxed from 0.30
+
+# Market context
+context:
+  typical_adr: 1.5  # Typical average daily range (points)
+  correlation_instruments: []  # Independent
+  correlation_weight: 0.0
+
+# Position sizing
+sizing:
+  preferred_contract: "MCL"
+  scale_to_mini_at_r: 6.0

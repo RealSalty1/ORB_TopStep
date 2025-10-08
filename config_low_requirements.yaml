@@ -1,0 +1,19 @@
+# Lowered requirements configuration for trade generation
+
+# Confluence scoring - LOWERED to trigger trades
+scoring:
+  enabled: true
+  base_required: 0  # Accept any signal (was 2)
+  weak_trend_required: 0  # Accept any signal (was 3)
+  weights:
+    price_action: 1.0
+    rel_vol: 1.0
+    profile: 1.0
+    vwap: 1.0
+    adx: 1.0
+
+# Buffer configuration - SMALLER for easier breakouts
+buffers:
+  fixed: 0.5  # Smaller buffer (was 2.0)
+  atr_mult: 0.02
+  use_atr: false
