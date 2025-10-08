@@ -79,12 +79,15 @@ class ORB2Config:
     
     # ✨ PHASE 1 OPTIMIZATIONS
     stop_multiplier: float = 1.3  # Widen stops by 30% to reduce noise stop-outs
-    breakeven_trigger_r: float = 0.3  # Move to breakeven at +0.3R MFE
+    breakeven_trigger_r: float = 0.2  # ✨ PHASE 1.1: Tightened from 0.3R to 0.2R
     use_partial_exits: bool = True  # Enable partial profit taking
-    partial_target_1_r: float = 0.5  # First partial at +0.5R
-    partial_target_1_size: float = 0.5  # Exit 50% at first target
-    partial_target_2_r: float = 1.0  # Second partial at +1.0R
+    
+    # ✨ PHASE 1.1: Adjusted partial levels - Let MORE run to target!
+    partial_target_1_r: float = 0.75  # First partial at +0.75R (was 0.5R)
+    partial_target_1_size: float = 0.25  # Exit 25% at first target (was 50%)
+    partial_target_2_r: float = 1.25  # Second partial at +1.25R (was 1.0R)
     partial_target_2_size: float = 0.25  # Exit 25% at second target
+    # Remaining 50% runs to full +1.5R target (was only 25%)
     
     # Probability gating
     use_probability_gating: bool = False  # Start without model
@@ -629,6 +632,22 @@ class ORB2Engine:
                     if "partial_fills" not in trade_state:
                         trade_state["partial_fills"] = []
                     trade_state["partial_fills"].append(fill)
+                    
+                    # ✨ PHASE 1.1: Trail stop after first partial to lock in gains
+                    if fill.target_number == 1 and stop_mgr:
+                        # After first partial (+0.75R), trail stop to +0.5R
+                        trail_to_r = 0.5
+                        trail_price = signal.entry_price + (trail_to_r * initial_risk)
+                        if signal.direction == "short":
+                            trail_price = signal.entry_price - (trail_to_r * initial_risk)
+                        
+                        # Only move stop if it's better than current
+                        if signal.direction == "long" and trail_price > stop_mgr.current_stop:
+                            stop_mgr.current_stop = trail_price
+                            logger.info(f"Trailing stop after partial: {trail_price:.2f} (+{trail_to_r}R)")
+                        elif signal.direction == "short" and trail_price < stop_mgr.current_stop:
+                            stop_mgr.current_stop = trail_price
+                            logger.info(f"Trailing stop after partial: {trail_price:.2f} (+{trail_to_r}R)")
             
             # Close trade if all targets hit (remaining size = 0)
             if partial_mgr.all_targets_hit:
