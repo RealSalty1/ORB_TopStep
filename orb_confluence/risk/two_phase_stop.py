@@ -92,6 +92,8 @@ class TwoPhaseStopManager:
         structural_buffer: float = 0.0,
         p_extension: Optional[float] = None,
         p_extension_threshold: float = 0.42,
+        stop_multiplier: float = 1.3,  # ✨ OPTIMIZATION: Widen stops to reduce noise stop-outs
+        breakeven_trigger_r: float = 0.3,  # ✨ OPTIMIZATION: Move to breakeven at +0.3R MFE
     ) -> None:
         """Initialize two-phase stop manager.
         
@@ -106,22 +108,27 @@ class TwoPhaseStopManager:
             structural_buffer: Buffer from structural anchor
             p_extension: Probability of extension (for runner gate)
             p_extension_threshold: Min p_extension to enable runner
+            stop_multiplier: Multiplier for initial stop distance (1.3 = 30% wider)
+            breakeven_trigger_r: MFE threshold to move stop to breakeven
         """
         self.direction = direction.lower()
         self.entry_price = entry_price
         self.initial_risk = initial_risk
-        self.phase1_distance = phase1_stop_distance
+        self.phase1_distance = phase1_stop_distance * stop_multiplier  # ✨ Apply multiplier
         self.phase2_trigger = phase2_trigger_r
         self.runner_trigger = runner_trigger_r
         self.structural_anchor = structural_anchor
         self.structural_buffer = structural_buffer
         self.p_extension = p_extension
         self.p_threshold = p_extension_threshold
+        self.stop_multiplier = stop_multiplier
+        self.breakeven_trigger = breakeven_trigger_r
         
         # Current state
         self.current_phase = StopPhase.PHASE1_STATISTICAL
         self.current_stop = self._compute_phase1_stop()
         self.highest_mfe_r = 0.0
+        self.breakeven_applied = False  # ✨ Track if breakeven already applied
         
         # History
         self.stop_updates: list[StopUpdate] = []
@@ -192,8 +199,23 @@ class TwoPhaseStopManager:
         
         # Phase transition logic
         if self.current_phase == StopPhase.PHASE1_STATISTICAL:
+            # ✨ OPTIMIZATION: Check for breakeven move first (at +0.3R MFE)
+            if not self.breakeven_applied and current_mfe_r >= self.breakeven_trigger:
+                # Move stop to breakeven (entry price)
+                new_stop = self.entry_price
+                # Ensure we're moving stop in favorable direction only
+                if self.direction == "long":
+                    new_stop = max(new_stop, old_stop)
+                else:
+                    new_stop = min(new_stop, old_stop)
+                
+                if new_stop != old_stop:  # Only record if actually moved
+                    self.breakeven_applied = True
+                    reason = f"Breakeven move at {current_mfe_r:.2f}R MFE"
+                    logger.info(f"Trade moved to breakeven: stop {old_stop:.2f} → {new_stop:.2f}")
+            
             # Check for Phase 2 transition
-            if current_mfe_r >= self.phase2_trigger:
+            elif current_mfe_r >= self.phase2_trigger:
                 new_phase = StopPhase.PHASE2_EXPANSION
                 new_stop = self._compute_phase2_stop()
                 # Only move stop up (long) or down (short), never against direction

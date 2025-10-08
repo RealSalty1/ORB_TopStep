@@ -77,10 +77,27 @@ class ORB2Config:
     salvage_trigger_mfe_r: float = 0.4
     salvage_retrace_threshold: float = 0.65
     
+    # ✨ PHASE 1 OPTIMIZATIONS
+    stop_multiplier: float = 1.3  # Widen stops by 30% to reduce noise stop-outs
+    breakeven_trigger_r: float = 0.3  # Move to breakeven at +0.3R MFE
+    use_partial_exits: bool = True  # Enable partial profit taking
+    partial_target_1_r: float = 0.5  # First partial at +0.5R
+    partial_target_1_size: float = 0.5  # Exit 50% at first target
+    partial_target_2_r: float = 1.0  # Second partial at +1.0R
+    partial_target_2_size: float = 0.25  # Exit 25% at second target
+    
     # Probability gating
     use_probability_gating: bool = False  # Start without model
     p_min_floor: float = 0.35
     p_runner_threshold: float = 0.55
+    
+    # ✨ Time filters (Phase 1 optimization)
+    use_time_filters: bool = True
+    avoid_first_minutes_after_or: int = 15  # Minutes after OR close to avoid
+    lunch_start_hour: int = 11  # CT (12:30 ET = 11:30 CT)
+    lunch_start_minute: int = 30
+    lunch_end_hour: int = 13  # CT (14:00 ET = 13:00 CT)
+    lunch_end_minute: int = 0
     
     # General
     atr_period: int = 14
@@ -319,10 +336,48 @@ class ORB2Engine:
         
         return max(atr, 0.1)  # Minimum 0.1
     
+    def _is_filtered_time(self, timestamp: pd.Timestamp, or_end_ts: pd.Timestamp) -> bool:
+        """Check if current time should be filtered out.
+        
+        ✨ PHASE 1 OPTIMIZATION: Time-based filters
+        
+        Args:
+            timestamp: Current bar timestamp
+            or_end_ts: OR close timestamp
+            
+        Returns:
+            True if time should be filtered (no trades), False otherwise
+        """
+        if not self.config.use_time_filters:
+            return False
+        
+        # Filter 1: First N minutes after OR close
+        minutes_since_or = (timestamp - or_end_ts).total_seconds() / 60
+        if 0 <= minutes_since_or < self.config.avoid_first_minutes_after_or:
+            return True
+        
+        # Filter 2: Lunch chop (11:30 CT - 13:00 CT)
+        hour = timestamp.hour
+        minute = timestamp.minute
+        
+        lunch_start_minutes = self.config.lunch_start_hour * 60 + self.config.lunch_start_minute
+        lunch_end_minutes = self.config.lunch_end_hour * 60 + self.config.lunch_end_minute
+        current_minutes = hour * 60 + minute
+        
+        if lunch_start_minutes <= current_minutes < lunch_end_minutes:
+            return True
+        
+        return False
+    
     def _check_for_signals(self, bar: pd.Series, bars_df: pd.DataFrame, idx: int):
         """Check all playbooks for signals."""
         # Get OR state
         dual_or = self.or_builder.state()
+        
+        # ✨ PHASE 1 OPTIMIZATION: Time filters
+        if dual_or.primary_finalized and self._is_filtered_time(bar["timestamp_utc"], dual_or.primary_end_ts):
+            logger.debug(f"Filtered time period, skipping signals")
+            return
         
         # Compute auction metrics (if not already)
         if not hasattr(self, '_auction_metrics'):
@@ -433,7 +488,7 @@ class ORB2Engine:
         # Initialize risk managers
         initial_risk = abs(signal.entry_price - signal.initial_stop)
         
-        # Two-phase stop
+        # Two-phase stop ✨ with Phase 1 optimizations
         stop_mgr = TwoPhaseStopManager(
             direction=signal.direction,
             entry_price=signal.entry_price,
@@ -441,6 +496,8 @@ class ORB2Engine:
             phase1_stop_distance=signal.phase1_stop_distance,
             phase2_trigger_r=self.config.phase2_trigger_r,
             structural_anchor=signal.structural_anchor,
+            stop_multiplier=self.config.stop_multiplier,  # ✨ Widen stops
+            breakeven_trigger_r=self.config.breakeven_trigger_r,  # ✨ Breakeven at +0.3R
         ) if self.config.use_two_phase_stops else None
         
         # Salvage
@@ -450,6 +507,20 @@ class ORB2Engine:
             initial_risk=initial_risk,
             initial_stop=signal.initial_stop,
         ) if self.config.use_salvage else None
+        
+        # ✨ Partial exits (Phase 1 optimization)
+        partial_mgr = None
+        if self.config.use_partial_exits:
+            from orb_confluence.risk.partial_exits import PartialExitManager, PartialTarget
+            partial_mgr = PartialExitManager(
+                direction=signal.direction,
+                entry_price=signal.entry_price,
+                initial_risk=initial_risk,
+                targets=[
+                    PartialTarget(target_r=self.config.partial_target_1_r, size_fraction=self.config.partial_target_1_size),
+                    PartialTarget(target_r=self.config.partial_target_2_r, size_fraction=self.config.partial_target_2_size),
+                ],
+            )
         
         # MFE/MAE tracker
         mfe_mae_tracker = MFEMAETracker(
@@ -469,6 +540,7 @@ class ORB2Engine:
             "signal": signal,
             "stop_mgr": stop_mgr,
             "salvage_mgr": salvage_mgr,
+            "partial_mgr": partial_mgr,  # ✨ Track partial exits
             "mfe_mae_tracker": mfe_mae_tracker,
             "gated_result": gated_result,
             "bars_in_trade": 0,
@@ -540,11 +612,39 @@ class ORB2Engine:
             self._close_trade(trade_id, bar, "STOP", exit_r)
             return
         
-        # Check targets (simplified - single target at 1.5R)
-        target_r = 1.5
-        if mfe_mae_tracker.mfe_r >= target_r:
-            self._close_trade(trade_id, bar, "TARGET", target_r)
-            return
+        # ✨ Check partial exits (Phase 1 optimization)
+        partial_mgr = trade_state.get("partial_mgr")
+        if partial_mgr:
+            partial_fills = partial_mgr.check_targets(
+                current_price=bar["close"],
+                bar_high=bar["high"],
+                bar_low=bar["low"],
+                timestamp=bar["timestamp_utc"],
+            )
+            
+            if partial_fills:
+                for fill in partial_fills:
+                    logger.info(f"Partial exit: {fill}")
+                    # Track partial fills for reporting
+                    if "partial_fills" not in trade_state:
+                        trade_state["partial_fills"] = []
+                    trade_state["partial_fills"].append(fill)
+            
+            # Close trade if all targets hit (remaining size = 0)
+            if partial_mgr.all_targets_hit:
+                # Calculate weighted average realized R
+                total_realized_r = sum(
+                    fill.realized_r * fill.size_fraction
+                    for fill in trade_state.get("partial_fills", [])
+                )
+                self._close_trade(trade_id, bar, "TARGET", total_realized_r)
+                return
+        else:
+            # Fallback: single target at 1.5R
+            target_r = 1.5
+            if mfe_mae_tracker.mfe_r >= target_r:
+                self._close_trade(trade_id, bar, "TARGET", target_r)
+                return
     
     def _close_trade(self, trade_id: str, bar: pd.Series, reason: str, realized_r: float):
         """Close trade and record results."""
