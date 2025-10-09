@@ -320,6 +320,76 @@ class Playbook(ABC):
         """
         pass
     
+    def get_dynamic_stop_from_book(
+        self,
+        position: Any,
+        mbp10_snapshot: Optional[Dict],
+        current_stop: float,
+    ) -> float:
+        """Calculate dynamic stop based on order book clusters.
+        
+        Week 4 Enhancement: Place stops at institutional support/resistance levels.
+        
+        Args:
+            position: Current position
+            mbp10_snapshot: MBP-10 order book snapshot
+            current_stop: Current stop price
+            
+        Returns:
+            New stop price (or current_stop if no change)
+        """
+        if mbp10_snapshot is None:
+            return current_stop
+        
+        from orb_confluence.features.order_book_features import OrderBookFeatures
+        ob_features = OrderBookFeatures()
+        
+        # Find strongest support/resistance
+        if hasattr(position, 'direction'):
+            from orb_confluence.strategy.playbook_base import Direction
+            
+            if position.direction == Direction.LONG:
+                # Find support below entry
+                support_price, support_size = ob_features.find_support_resistance(
+                    mbp10_snapshot, 'LONG'
+                )
+                
+                # Use support if it's below entry and stronger than current stop
+                if support_price and support_size > 50:  # Significant size
+                    entry_price = position.entry_price
+                    if support_price < entry_price:
+                        # Place stop just below support
+                        dynamic_stop = support_price - 0.25  # 1 tick buffer
+                        
+                        # Only tighten stop, never loosen
+                        if dynamic_stop > current_stop:
+                            logger.debug(
+                                f"Dynamic stop: ${dynamic_stop:.2f} (support @ ${support_price:.2f} x {support_size})"
+                            )
+                            return dynamic_stop
+            
+            elif position.direction == Direction.SHORT:
+                # Find resistance above entry
+                resistance_price, resistance_size = ob_features.find_support_resistance(
+                    mbp10_snapshot, 'SHORT'
+                )
+                
+                # Use resistance if it's above entry and stronger than current stop
+                if resistance_price and resistance_size > 50:
+                    entry_price = position.entry_price
+                    if resistance_price > entry_price:
+                        # Place stop just above resistance
+                        dynamic_stop = resistance_price + 0.25  # 1 tick buffer
+                        
+                        # Only tighten stop, never loosen
+                        if dynamic_stop < current_stop:
+                            logger.debug(
+                                f"Dynamic stop: ${dynamic_stop:.2f} (resistance @ ${resistance_price:.2f} x {resistance_size})"
+                            )
+                            return dynamic_stop
+        
+        return current_stop
+    
     def check_order_flow_exit(
         self,
         position: Any,

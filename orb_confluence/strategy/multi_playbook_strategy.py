@@ -454,7 +454,7 @@ class MultiPlaybookStrategy:
                 self._close_position(position, current_price, order_flow_exit_reason, exit_time)
                 continue
             
-            # Update stops
+            # Update stops (with dynamic book-based stops)
             new_stop = playbook.update_stops(
                 position=position,
                 bars=bars,
@@ -462,6 +462,21 @@ class MultiPlaybookStrategy:
                 mfe=position.mfe,
                 mae=position.mae,
             )
+            
+            # Week 4: Apply dynamic stop based on order book clusters
+            if mbp10_snapshot is not None:
+                dynamic_stop = playbook.get_dynamic_stop_from_book(
+                    position=position,
+                    mbp10_snapshot=mbp10_snapshot,
+                    current_stop=new_stop,
+                )
+                
+                if dynamic_stop != new_stop:
+                    logger.info(
+                        f"📍 Dynamic stop adjustment: ${new_stop:.2f} → ${dynamic_stop:.2f} "
+                        f"(book cluster protection)"
+                    )
+                    new_stop = dynamic_stop
             
             if new_stop != position.current_stop:
                 position.current_stop = new_stop
@@ -526,7 +541,53 @@ class MultiPlaybookStrategy:
         if not regime_playbooks:
             return actions
         
-        # Generate signals from each playbook (with order flow filters)
+        # ===================================================================
+        # WEEK 4: CORRELATION FILTER - Check for book exhaustion
+        # ===================================================================
+        exhausted_directions = set()
+        
+        if mbp10_snapshot is not None and len(self.open_positions) > 0:
+            # Get position directions
+            position_directions = {}
+            for pos in self.open_positions:
+                direction_str = pos.direction.value  # 'LONG' or 'SHORT'
+                if direction_str not in position_directions:
+                    position_directions[direction_str] = []
+                position_directions[direction_str].append(pos)
+            
+            # Check exhaustion for each direction with open positions
+            from orb_confluence.features.order_book_features import OrderBookFeatures
+            ob_features = OrderBookFeatures()
+            
+            # We need recent snapshots for exhaustion detection
+            # For now, use current snapshot as proxy
+            # TODO: Implement rolling snapshot history
+            
+            for direction_str, positions in position_directions.items():
+                # Simple exhaustion check using current OFI
+                ofi = ob_features.order_flow_imbalance(mbp10_snapshot)
+                depth = ob_features.depth_imbalance(mbp10_snapshot)
+                
+                # Check if flow is weakening in position direction
+                if direction_str == 'SHORT':
+                    # Already SHORT, check if sell flow weakening
+                    if ofi > -0.15:  # Selling pressure gone
+                        exhausted_directions.add(direction_str)
+                        logger.info(
+                            f"🛑 EXHAUSTION: SHORT flow weakening (OFI={ofi:.3f} > -0.15). "
+                            f"Skip new SHORT entries."
+                        )
+                elif direction_str == 'LONG':
+                    # Already LONG, check if buy flow weakening
+                    if ofi < 0.15:  # Buying pressure gone
+                        exhausted_directions.add(direction_str)
+                        logger.info(
+                            f"🛑 EXHAUSTION: LONG flow weakening (OFI={ofi:.3f} < 0.15). "
+                            f"Skip new LONG entries."
+                        )
+        # ===================================================================
+        
+        # Generate signals from each playbook (with order flow filters + exhaustion filter)
         signals = []
         for playbook in regime_playbooks:
             signal = playbook.check_entry(
@@ -535,10 +596,18 @@ class MultiPlaybookStrategy:
                 regime=self.current_regime,
                 features=self.current_features,
                 open_positions=self.open_positions,
-                mbp10_snapshot=mbp10_snapshot,  # Week 3: Order flow filters
+                mbp10_snapshot=mbp10_snapshot,  # Week 2-3: Order flow filters
             )
             
             if signal:
+                # Week 4: Filter out signals in exhausted directions
+                if signal.direction.value in exhausted_directions:
+                    logger.info(
+                        f"🛑 Signal from {signal.playbook_name} ({signal.direction.value}) "
+                        f"FILTERED by exhaustion check"
+                    )
+                    continue
+                
                 signals.append(signal)
         
         if not signals:
