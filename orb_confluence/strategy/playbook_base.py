@@ -320,6 +320,79 @@ class Playbook(ABC):
         """
         pass
     
+    def check_order_flow_exit(
+        self,
+        position: Any,
+        mbp10_snapshot: Optional[Dict],
+        mfe: float,
+    ) -> Optional[str]:
+        """Check if position should be exited based on order flow.
+        
+        Week 3 Enhancement: Exit when order flow turns against position.
+        
+        Args:
+            position: Current position
+            mbp10_snapshot: MBP-10 order book snapshot
+            mfe: Maximum Favorable Excursion (in R)
+            
+        Returns:
+            Exit reason string if should exit, None otherwise
+        """
+        # Default implementation: no order flow exit
+        # Subclasses can override for custom behavior
+        if mbp10_snapshot is None:
+            return None
+        
+        from orb_confluence.features.order_book_features import OrderBookFeatures
+        ob_features = OrderBookFeatures()
+        
+        # Calculate OFI
+        ofi = ob_features.order_flow_imbalance(mbp10_snapshot)
+        
+        # Check for OFI reversal (flow turns against position)
+        if hasattr(position, 'direction'):
+            from orb_confluence.strategy.playbook_base import Direction
+            
+            # LONG position: Exit if OFI turns negative (selling pressure)
+            if position.direction == Direction.LONG:
+                if ofi < -0.2 and mfe > 0.3:  # OFI reversal after profit
+                    logger.info(
+                        f"{self.name}: OFI REVERSAL exit - LONG with OFI={ofi:.3f} (MFE={mfe:.2f}R)"
+                    )
+                    return "OFI_REVERSAL"
+            
+            # SHORT position: Exit if OFI turns positive (buying pressure)
+            elif position.direction == Direction.SHORT:
+                if ofi > 0.2 and mfe > 0.3:  # OFI reversal after profit
+                    logger.info(
+                        f"{self.name}: OFI REVERSAL exit - SHORT with OFI={ofi:.3f} (MFE={mfe:.2f}R)"
+                    )
+                    return "OFI_REVERSAL"
+        
+        # Check for large opposing orders (institutional resistance)
+        large_orders = ob_features.detect_large_orders(mbp10_snapshot, threshold=100)
+        
+        if hasattr(position, 'direction'):
+            # LONG position: Exit if large ASK orders appear
+            if position.direction == Direction.LONG:
+                if large_orders['ask_large_orders'] and mfe > 0.2:
+                    logger.info(
+                        f"{self.name}: LARGE ORDER exit - LONG facing {large_orders['ask_large_orders']} "
+                        f"at {large_orders['ask_large_prices'][0]:.2f} (MFE={mfe:.2f}R)"
+                    )
+                    return "INSTITUTIONAL_RESISTANCE"
+            
+            # SHORT position: Exit if large BID orders appear
+            elif position.direction == Direction.SHORT:
+                if large_orders['bid_large_orders'] and mfe > 0.2:
+                    logger.info(
+                        f"{self.name}: LARGE ORDER exit - SHORT facing {large_orders['bid_large_orders']} "
+                        f"at {large_orders['bid_large_prices'][0]:.2f} (MFE={mfe:.2f}R)"
+                    )
+                    return "INSTITUTIONAL_RESISTANCE"
+        
+        return None
+    
     def get_regime_alignment(self, regime: str) -> float:
         """Calculate how well current regime aligns with playbook.
         

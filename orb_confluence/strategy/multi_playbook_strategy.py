@@ -137,6 +137,7 @@ class MultiPlaybookStrategy:
         enable_signal_arbitration: bool = True,
         enable_correlation_weighting: bool = True,
         point_value: float = 50.0,
+        mbp10_loader: Optional[Any] = None,
     ):
         """Initialize multi-playbook strategy.
         
@@ -150,6 +151,7 @@ class MultiPlaybookStrategy:
             enable_signal_arbitration: Use signal arbitrator (default: True)
             enable_correlation_weighting: Use correlation weighting (default: True)
             point_value: Dollar value per point (default: 50 for ES)
+            mbp10_loader: MBP10Loader instance for order book data (Week 3 enhancement)
         """
         # Core components
         self.playbooks = playbooks
@@ -173,6 +175,9 @@ class MultiPlaybookStrategy:
         # Configuration
         self.enable_signal_arbitration = enable_signal_arbitration
         self.enable_correlation_weighting = enable_correlation_weighting
+        
+        # Week 3: MBP-10 order book integration
+        self.mbp10_loader = mbp10_loader
         
         # Register playbooks
         for playbook in playbooks:
@@ -282,6 +287,31 @@ class MultiPlaybookStrategy:
         """
         actions = []
         
+        # Step 0: Load MBP-10 order book snapshot (Week 3 enhancement)
+        mbp10_snapshot = None
+        if self.mbp10_loader is not None and 'timestamp' in current_bar:
+            try:
+                timestamp = current_bar['timestamp']
+                if hasattr(timestamp, 'to_pydatetime'):
+                    timestamp = timestamp.to_pydatetime()
+                
+                # Extract date string (YYYYMMDD format)
+                date_str = timestamp.strftime('%Y%m%d')
+                
+                # Get snapshot at this timestamp
+                mbp10_snapshot = self.mbp10_loader.get_snapshot_at(
+                    date=date_str,
+                    time=timestamp,
+                    tolerance_seconds=5,
+                )
+                
+                if mbp10_snapshot:
+                    logger.debug(f"Loaded MBP-10 snapshot at {timestamp}")
+                    
+            except Exception as e:
+                logger.warning(f"Failed to load MBP-10 snapshot: {e}")
+                mbp10_snapshot = None
+        
         # Step 1: Calculate features
         self.current_features = self.features.calculate_all_features(
             bars_1m=bars_1m,
@@ -307,13 +337,13 @@ class MultiPlaybookStrategy:
         else:
             self.current_regime = "UNKNOWN"
         
-        # Step 3: Update existing positions
-        position_actions = self._manage_positions(current_bar, bars_1m)
+        # Step 3: Update existing positions (with order flow exits)
+        position_actions = self._manage_positions(current_bar, bars_1m, mbp10_snapshot)
         actions.extend(position_actions)
         
-        # Step 4: Generate new signals (if not at position limit)
+        # Step 4: Generate new signals (if not at position limit, with order flow filters)
         if len(self.open_positions) < self.max_simultaneous_positions:
-            signal_actions = self._generate_signals(current_bar, bars_1m)
+            signal_actions = self._generate_signals(current_bar, bars_1m, mbp10_snapshot)
             actions.extend(signal_actions)
         
         return actions
@@ -322,12 +352,14 @@ class MultiPlaybookStrategy:
         self,
         current_bar: pd.Series,
         bars: pd.DataFrame,
+        mbp10_snapshot: Optional[Dict] = None,
     ) -> List[Dict[str, Any]]:
-        """Manage existing positions (stops, salvage, targets).
+        """Manage existing positions (stops, salvage, targets, order flow exits).
         
         Args:
             current_bar: Current bar
             bars: Historical bars
+            mbp10_snapshot: MBP-10 order book snapshot (Week 3 enhancement)
             
         Returns:
             List of position management actions
@@ -401,6 +433,27 @@ class MultiPlaybookStrategy:
                 self._close_position(position, current_price, 'SALVAGE', exit_time)
                 continue
             
+            # Check order flow exit (Week 3 enhancement)
+            order_flow_exit_reason = playbook.check_order_flow_exit(
+                position=position,
+                mbp10_snapshot=mbp10_snapshot,
+                mfe=position.mfe,
+            )
+            
+            if order_flow_exit_reason:
+                actions.append({
+                    'action': 'EXIT',
+                    'position_id': i,
+                    'reason': order_flow_exit_reason,
+                    'price': current_price,
+                })
+                # Get timestamp from current_bar (ensure it's a proper datetime)
+                exit_time = current_bar.get('timestamp')
+                if exit_time is not None and not isinstance(exit_time, datetime):
+                    exit_time = pd.Timestamp(exit_time)
+                self._close_position(position, current_price, order_flow_exit_reason, exit_time)
+                continue
+            
             # Update stops
             new_stop = playbook.update_stops(
                 position=position,
@@ -453,12 +506,14 @@ class MultiPlaybookStrategy:
         self,
         current_bar: pd.Series,
         bars: pd.DataFrame,
+        mbp10_snapshot: Optional[Dict] = None,
     ) -> List[Dict[str, Any]]:
-        """Generate new trading signals.
+        """Generate new trading signals (with order flow filters).
         
         Args:
             current_bar: Current bar
             bars: Historical bars
+            mbp10_snapshot: MBP-10 order book snapshot (Week 3 enhancement)
             
         Returns:
             List of entry actions
@@ -471,7 +526,7 @@ class MultiPlaybookStrategy:
         if not regime_playbooks:
             return actions
         
-        # Generate signals from each playbook
+        # Generate signals from each playbook (with order flow filters)
         signals = []
         for playbook in regime_playbooks:
             signal = playbook.check_entry(
@@ -480,6 +535,7 @@ class MultiPlaybookStrategy:
                 regime=self.current_regime,
                 features=self.current_features,
                 open_positions=self.open_positions,
+                mbp10_snapshot=mbp10_snapshot,  # Week 3: Order flow filters
             )
             
             if signal:
