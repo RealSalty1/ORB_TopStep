@@ -380,10 +380,65 @@ def main():
     console.print("[cyan]Running ORB 2.0 backtest...[/cyan]")
     
     try:
-        results = engine.run(
-            bars=bars,
-            instrument=args.symbol,
-        )
+        # Split bars by trading day
+        bars['date'] = bars['timestamp_utc'].dt.date
+        sessions = bars.groupby('date')
+        
+        logger.info(f"Found {len(sessions)} trading sessions")
+        
+        all_results = []
+        for session_date, session_bars in sessions:
+            logger.info(f"Processing session: {session_date}")
+            
+            # Run single session
+            session_result = engine.run(
+                bars=session_bars.reset_index(drop=True),
+                instrument=args.symbol,
+                session_date=str(session_date),
+            )
+            
+            all_results.append(session_result)
+        
+        # Aggregate results
+        total_trades = sum(r['total_trades'] for r in all_results)
+        all_trades_list = []
+        for r in all_results:
+            all_trades_list.extend(r['trades'])
+        
+        winners = [t for t in all_trades_list if t.realized_r > 0]
+        losers = [t for t in all_trades_list if t.realized_r < 0]
+        
+        results = {
+            'total_trades': total_trades,
+            'trades': all_trades_list,
+            'winning_trades': len(winners),
+            'losing_trades': len(losers),
+            'cumulative_r': sum(t.realized_r for t in all_trades_list),
+            'mfe_list': [t.mfe_r for t in all_trades_list],
+            'mae_list': [t.mae_r for t in all_trades_list],
+            'salvages': sum(1 for t in all_trades_list if t.salvage_triggered),
+        }
+        
+        if total_trades > 0:
+            results['win_rate'] = len(winners) / total_trades
+            results['expectancy'] = results['cumulative_r'] / total_trades
+            results['avg_winner'] = sum(t.realized_r for t in winners) / len(winners) if winners else 0.0
+            results['avg_loser'] = sum(t.realized_r for t in losers) / len(losers) if losers else 0.0
+            results['max_win'] = max((t.realized_r for t in winners), default=0.0)
+            results['max_loss'] = min((t.realized_r for t in losers), default=0.0)
+            results['avg_mfe'] = sum(results['mfe_list']) / len(results['mfe_list'])
+            results['avg_mae'] = sum(results['mae_list']) / len(results['mae_list'])
+        else:
+            results['win_rate'] = 0.0
+            results['expectancy'] = 0.0
+            results['avg_winner'] = 0.0
+            results['avg_loser'] = 0.0
+            results['max_win'] = 0.0
+            results['max_loss'] = 0.0
+            results['avg_mfe'] = 0.0
+            results['avg_mae'] = 0.0
+        
+        logger.info(f"Backtest complete: {total_trades} trades, {results['cumulative_r']:.2f}R")
         
         # Print results
         print_results_table(results)

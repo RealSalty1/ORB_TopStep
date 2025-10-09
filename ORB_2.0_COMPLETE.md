@@ -239,13 +239,13 @@ print(f"95% CI: [{ci_lower:.3f}R, {ci_upper:.3f}R]")
 
 ## 🎯 Performance Targets vs Baseline
 
-| Metric | Baseline | Target | Implementation |
-|--------|----------|--------|----------------|
-| **Expectancy** | -0.22R | +0.08-0.15R | ✅ Framework complete |
-| **Avg Loser** | -1.27R | ≤-0.95R | ✅ Salvage + two-phase stops |
-| **Avg Winner** | +0.50R | +0.65-0.75R | ✅ Trailing modes + partials |
-| **Win Rate** | 58% | 52-58% | ✅ Maintained |
-| **Salvage Recovery** | 0% | 12% | ✅ Salvage system built |
+|         Metric         | Baseline | Target | Implementation |
+|------------------------|----------|--------|----------------|
+| **Expectancy**         | -0.22R | +0.08-0.15R | ✅ Framework complete |
+| **Avg Loser**          | -1.27R | ≤-0.95R | ✅ Salvage + two-phase stops |
+| **Avg Winner**         | +0.50R | +0.65-0.75R | ✅ Trailing modes + partials |
+| **Win Rate**           | 58% | 52-58% | ✅ Maintained |
+| **Salvage Recovery**   | 0% | 12% | ✅ Salvage system built |
 | **Playbook Diversity** | 1 | ≥3 positive | ✅ 3 core playbooks + 3 planned |
 
 ---

@@ -525,6 +525,9 @@ def page_orb2_analysis(run_data):
     
     st.markdown("---")
     
+    # Multi-playbook breakdown (if applicable)
+    is_multi_playbook = render_multi_playbook_breakdown(run_data)
+    
     # Trade Statistics
     st.markdown("## 📈 Trade Statistics")
     col1, col2, col3, col4, col5, col6 = st.columns(6)
@@ -819,4 +822,237 @@ def page_orb2_analysis(run_data):
                 st.info("No salvage exits in this backtest.")
         else:
             st.info("Salvage data not available for this backtest run.")
+
+
+def render_multi_playbook_breakdown(data):
+    """Render multi-playbook performance breakdown."""
+    from pathlib import Path
+    import json
+    
+    run_id = data['run_id']
+    playbook_stats_file = Path(f"runs/{run_id}/playbook_stats.json")
+    
+    if not playbook_stats_file.exists():
+        return False  # Not a multi-playbook run
+    
+    # Load playbook stats
+    with open(playbook_stats_file, 'r') as f:
+        playbook_stats = json.load(f)
+    
+    if not playbook_stats:
+        return False
+    
+    st.markdown("---")
+    st.header("📚 Playbook Performance Breakdown")
+    st.markdown("*Individual performance analysis for each trading playbook*")
+    
+    # Create playbook comparison metrics
+    playbook_names = list(playbook_stats.keys())
+    n_playbooks = len(playbook_names)
+    
+    # Summary cards for each playbook
+    cols = st.columns(min(n_playbooks, 4))
+    for idx, playbook_name in enumerate(playbook_names):
+        stats = playbook_stats[playbook_name]
+        with cols[idx % len(cols)]:
+            win_rate = stats['win_rate'] * 100
+            color = "#00ff88" if stats['avg_r'] > 0 else "#ff6b6b"
+            
+            st.markdown(f"""
+            <div style='background-color: rgba(30, 30, 30, 0.5); padding: 15px; border-radius: 10px; border-left: 4px solid {color};'>
+                <h4 style='margin: 0; color: {color};'>{playbook_name}</h4>
+                <p style='margin: 5px 0; font-size: 24px; font-weight: bold;'>{stats['avg_r']:.3f}R</p>
+                <p style='margin: 5px 0; color: #888;'>{stats['count']} trades | {win_rate:.0f}% win rate</p>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Comparative performance table
+    st.subheader("📊 Playbook Comparison")
+    
+    playbook_df = pd.DataFrame([
+        {
+            'Playbook': name,
+            'Total Trades': stats['count'],
+            'Win Rate': f"{stats['win_rate']:.1%}",
+            'Avg R': stats['avg_r'],
+            'Total R': stats['total_r'],
+            'Expectancy': stats['avg_r'],
+        }
+        for name, stats in playbook_stats.items()
+    ])
+    
+    # Style the dataframe
+    st.dataframe(
+        playbook_df.style.background_gradient(subset=['Avg R', 'Total R'], cmap='RdYlGn', vmin=-0.5, vmax=1.0),
+        use_container_width=True,
+        hide_index=True
+    )
+    
+    st.markdown("---")
+    
+    # Performance comparison charts
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Total R by Playbook")
+        fig = go.Figure(data=[
+            go.Bar(
+                x=[stats['total_r'] for stats in playbook_stats.values()],
+                y=list(playbook_stats.keys()),
+                orientation='h',
+                marker=dict(
+                    color=[stats['total_r'] for stats in playbook_stats.values()],
+                    colorscale='RdYlGn',
+                    line=dict(color='white', width=1)
+                ),
+                text=[f"{stats['total_r']:.2f}R" for stats in playbook_stats.values()],
+                textposition='outside',
+            )
+        ])
+        
+        fig.update_layout(
+            template='plotly_dark',
+            height=250,
+            yaxis=dict(title=""),
+            xaxis=dict(title="Total R"),
+            showlegend=False,
+            margin=dict(l=0, r=50, t=10, b=0),
+        )
+        
+        st.plotly_chart(fig, use_container_width=True, key="total_r_by_playbook")
+    
+    with col2:
+        st.subheader("Average R by Playbook")
+        fig = go.Figure(data=[
+            go.Bar(
+                x=[stats['avg_r'] for stats in playbook_stats.values()],
+                y=list(playbook_stats.keys()),
+                orientation='h',
+                marker=dict(
+                    color=[stats['avg_r'] for stats in playbook_stats.values()],
+                    colorscale='RdYlGn',
+                    line=dict(color='white', width=1)
+                ),
+                text=[f"{stats['avg_r']:.3f}R" for stats in playbook_stats.values()],
+                textposition='outside',
+            )
+        ])
+        
+        fig.update_layout(
+            template='plotly_dark',
+            height=250,
+            yaxis=dict(title=""),
+            xaxis=dict(title="Average R"),
+            showlegend=False,
+            margin=dict(l=0, r=50, t=10, b=0),
+        )
+        
+        st.plotly_chart(fig, use_container_width=True, key="avg_r_by_playbook")
+    
+    # Trade count comparison
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Trade Distribution")
+        fig = go.Figure(data=[
+            go.Pie(
+                labels=list(playbook_stats.keys()),
+                values=[stats['count'] for stats in playbook_stats.values()],
+                hole=0.4,
+                marker=dict(
+                    colors=['#00ff88', '#00bfff', '#ffa500', '#ff6b6b'][:len(playbook_stats)],
+                    line=dict(color='#1e1e1e', width=2)
+                ),
+                textinfo='label+percent',
+                textfont=dict(size=12),
+            )
+        ])
+        
+        fig.update_layout(
+            template='plotly_dark',
+            height=300,
+            showlegend=True,
+            legend=dict(orientation="v", y=0.5, x=1.1),
+            margin=dict(l=0, r=0, t=0, b=0),
+        )
+        
+        st.plotly_chart(fig, use_container_width=True, key="trade_distribution")
+    
+    with col2:
+        st.subheader("Win Rate Comparison")
+        fig = go.Figure(data=[
+            go.Bar(
+                x=list(playbook_stats.keys()),
+                y=[stats['win_rate'] * 100 for stats in playbook_stats.values()],
+                marker=dict(
+                    color=[stats['win_rate'] * 100 for stats in playbook_stats.values()],
+                    colorscale='RdYlGn',
+                    cmin=0,
+                    cmax=100,
+                    line=dict(color='white', width=1)
+                ),
+                text=[f"{stats['win_rate']:.0%}" for stats in playbook_stats.values()],
+                textposition='outside',
+            )
+        ])
+        
+        # Add 50% line
+        fig.add_hline(y=50, line_dash="dash", line_color="cyan", opacity=0.5,
+                     annotation_text="50%", annotation_position="right")
+        
+        fig.update_layout(
+            template='plotly_dark',
+            height=300,
+            yaxis=dict(title="Win Rate (%)", range=[0, min(100, max([stats['win_rate'] * 100 for stats in playbook_stats.values()]) * 1.2)]),
+            xaxis=dict(title=""),
+            showlegend=False,
+            margin=dict(l=0, r=0, t=0, b=0),
+        )
+        
+        st.plotly_chart(fig, use_container_width=True, key="win_rate_comparison")
+    
+    # Per-playbook equity curves
+    if 'playbook' in data['trades'].columns or 'playbook_name' in data['trades'].columns:
+        st.markdown("---")
+        st.subheader("📈 Individual Playbook Equity Curves")
+        
+        playbook_col = 'playbook' if 'playbook' in data['trades'].columns else 'playbook_name'
+        
+        fig = go.Figure()
+        
+        for playbook_name in playbook_names:
+            playbook_trades = data['trades'][data['trades'][playbook_col] == playbook_name].sort_values('exit_ts')
+            if len(playbook_trades) > 0:
+                cumulative_r = playbook_trades['realized_r'].cumsum()
+                fig.add_trace(go.Scatter(
+                    x=playbook_trades['exit_ts'],
+                    y=cumulative_r,
+                    mode='lines',
+                    name=playbook_name,
+                    line=dict(width=2),
+                    hovertemplate='<b>%{fullData.name}</b><br>%{y:.2f}R<br>%{x}<extra></extra>',
+                ))
+        
+        fig.update_layout(
+            template='plotly_dark',
+            height=400,
+            xaxis=dict(title="Date"),
+            yaxis=dict(title="Cumulative R"),
+            hovermode='x unified',
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01,
+                bgcolor='rgba(0,0,0,0.5)'
+            )
+        )
+        
+        st.plotly_chart(fig, use_container_width=True, key="playbook_equity_curves")
+    
+    return True
+
 

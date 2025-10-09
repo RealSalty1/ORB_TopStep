@@ -17,6 +17,7 @@ from multi_instrument_pages import (
 )
 from enhanced_charts_page import page_charts_enhanced
 from orb2_analysis_page import page_orb2_analysis
+from chart_page import page_chart_analysis
 
 # Page config
 st.set_page_config(
@@ -143,9 +144,41 @@ def load_run_data(run_id):
         'config': None,
     }
     
-    # Check format: ORB 2.0 (metrics.json), multi-instrument (all_trades.json), or single (summary.json)
+    # Check format: ORB 2.0 (metrics.json), multi-playbook (ES_trades.parquet), multi-instrument (all_trades.json), or single (summary.json)
+    is_multi_playbook = (run_path / "metrics.json").exists() and (run_path / "playbook_stats.json").exists()
     is_orb2 = (run_path / "metrics.json").exists() and (run_path / "trades.parquet").exists()
     is_multi_instrument = (run_path / "all_trades.json").exists()
+    
+    if is_multi_playbook:
+        # Load Multi-Playbook format (ES_trades.parquet, playbook_stats.json)
+        with open(run_path / "metrics.json", 'r') as f:
+            metrics_data = json.load(f)
+        
+        # Find the trades parquet file (ES_trades.parquet, NQ_trades.parquet, etc.)
+        trades_files = list(run_path.glob("*_trades.parquet"))
+        if trades_files:
+            trades_df = pd.read_parquet(trades_files[0])
+            
+            # Normalize column names for multi-playbook format
+            if 'entry_time' in trades_df.columns:
+                trades_df['entry_ts'] = pd.to_datetime(trades_df['entry_time'], utc=True, errors='coerce')
+            if 'exit_time' in trades_df.columns:
+                trades_df['exit_ts'] = pd.to_datetime(trades_df['exit_time'], utc=True, errors='coerce')
+            if 'r_multiple' in trades_df.columns and 'realized_r' not in trades_df.columns:
+                trades_df['realized_r'] = trades_df['r_multiple']
+            if 'playbook' in trades_df.columns and 'playbook_name' not in trades_df.columns:
+                trades_df['playbook_name'] = trades_df['playbook']
+            if 'mae' in trades_df.columns and 'mae_r' not in trades_df.columns:
+                trades_df['mae_r'] = trades_df['mae']
+            if 'mfe' in trades_df.columns and 'mfe_r' not in trades_df.columns:
+                trades_df['mfe_r'] = trades_df['mfe']
+            if 'pnl' in trades_df.columns and 'dollar_pnl' not in trades_df.columns:
+                trades_df['dollar_pnl'] = trades_df['pnl']
+            
+            data['trades'] = trades_df
+            data['metrics'] = metrics_data
+            
+            return data
     
     if is_orb2:
         # Load ORB 2.0 format
@@ -1478,7 +1511,7 @@ def main():
     # Check if we're on the Charts page (which doesn't need run data)
     page = st.sidebar.radio(
         "📍 Navigation",
-        ["Overview", "ORB 2.0 Analysis", "Equity Curve", "Trades Table", "Factor Attribution", "OR Distribution", "Charts", "Multi-Instrument", "Pre-Session Rankings"],
+        ["Overview", "ORB 2.0 Analysis", "Trade Charts", "Equity Curve", "Trades Table", "Factor Attribution", "OR Distribution", "Charts", "Multi-Instrument", "Pre-Session Rankings"],
         label_visibility="visible"
     )
     
@@ -1494,6 +1527,15 @@ def main():
             st.info("👈 Select an ORB 2.0 backtest run from the sidebar to view detailed strategy analysis")
             return
         page_orb2_analysis(data)
+        return
+    
+    # Trade Charts page (TradingView-style)
+    if page == "Trade Charts":
+        if data is None or data.get('trades') is None:
+            st.title("📈 Trade Chart Analysis")
+            st.info("👈 Select a backtest run from the sidebar to view TradingView-style trade charts")
+            return
+        page_chart_analysis(data)
         return
     
     # Multi-instrument pages

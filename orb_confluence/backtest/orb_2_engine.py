@@ -102,6 +102,37 @@ class ORB2Config:
     lunch_end_hour: int = 13  # CT (14:00 ET = 13:00 CT)
     lunch_end_minute: int = 0
     
+    # 🎯 PHASE 2: CONSISTENCY ENHANCEMENTS
+    use_daily_loss_limit: bool = True  # Stop trading if daily loss limit hit
+    daily_loss_limit_r: float = -2.0  # Max loss per day in R
+    
+    use_regime_filter: bool = False  # DISABLED: ADX too strict for intraday
+    adx_period: int = 14
+    adx_trending_threshold: float = 15.0  # ADX > 15 = trending (relaxed)
+    
+    use_or_width_filter: bool = False  # DISABLED: Too strict, filters too many days
+    
+    use_intraday_monitor: bool = True  # Shut down if bleeding intraday
+    intraday_stop_loss_r: float = -1.5  # Stop new trades if down >1.5R by noon
+    intraday_check_hour: int = 12  # CT time to check
+    
+    # 🚀 PHASE 2B: ENTRY QUALITY FILTERS
+    use_momentum_filter: bool = True  # Require price momentum on breakout
+    min_breakout_velocity: float = 0.3  # Min % move per minute (in ATR units)
+    
+    use_volume_confirmation: bool = True  # Require volume spike
+    min_volume_ratio: float = 1.5  # Volume must be >1.5x recent average
+    
+    use_trend_alignment: bool = True  # Trade with broader trend only
+    fast_ema_period: int = 5  # Fast EMA for trend (5 bars)
+    slow_ema_period: int = 15  # Slow EMA for trend (15 bars)
+    
+    use_price_action_filter: bool = True  # Clean breakouts only
+    max_wick_ratio: float = 0.4  # Max wick size (40% of candle)
+    
+    use_reentry_cooldown: bool = True  # Prevent overtrading
+    reentry_cooldown_minutes: int = 5  # Minutes between trades same direction
+    
     # General
     atr_period: int = 14
     adr_period: int = 20
@@ -200,6 +231,13 @@ class ORB2Engine:
         self.completed_trades: List[ORB2Trade] = []
         self.cumulative_r = 0.0
         
+        # 🎯 PHASE 2: Daily P&L tracking for loss limit
+        self.daily_r = 0.0  # Reset per session
+        self.daily_shutdown = False  # Flag to stop new trades
+        
+        # 🚀 PHASE 2B: Entry quality tracking
+        self.last_trade_time = {"long": None, "short": None}  # Track last entry per direction
+        
         logger.info(f"ORB 2.0 Engine initialized with {len(self.playbooks)} playbooks")
     
     def fit_exclusion_matrix(self, trades_df: pd.DataFrame) -> None:
@@ -245,6 +283,13 @@ class ORB2Engine:
             session_date = bars.iloc[0]["timestamp_utc"].strftime("%Y-%m-%d")
         
         logger.info(f"Running ORB 2.0 backtest: {instrument} {session_date}, {len(bars)} bars")
+        
+        # 🎯 PHASE 2: Reset daily tracking
+        self.daily_r = 0.0
+        self.daily_shutdown = False
+        
+        # 🚀 PHASE 2B: Reset entry quality tracking
+        self.last_trade_time = {"long": None, "short": None}
         
         # Initialize session
         self._initialize_session(bars.iloc[0]["timestamp_utc"], instrument, session_date)
@@ -339,6 +384,234 @@ class ORB2Engine:
         
         return max(atr, 0.1)  # Minimum 0.1
     
+    def _calculate_adx(self, bars_df: pd.DataFrame, period: int = 14) -> float:
+        """Calculate Average Directional Index (ADX) for regime detection.
+        
+        Args:
+            bars_df: DataFrame with OHLC data
+            period: ADX period
+            
+        Returns:
+            ADX value (0-100). Higher = stronger trend.
+        """
+        if len(bars_df) < period + 1:
+            return 0.0
+        
+        # Calculate True Range (TR)
+        high = bars_df['high'].values
+        low = bars_df['low'].values
+        close = bars_df['close'].values
+        
+        tr = np.maximum(
+            high[1:] - low[1:],
+            np.maximum(
+                np.abs(high[1:] - close[:-1]),
+                np.abs(low[1:] - close[:-1])
+            )
+        )
+        
+        # Calculate directional movement
+        up_move = high[1:] - high[:-1]
+        down_move = low[:-1] - low[1:]
+        
+        plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
+        minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
+        
+        # Smooth with EMA
+        alpha = 1.0 / period
+        atr = pd.Series(tr).ewm(alpha=alpha, adjust=False).mean().iloc[-1]
+        plus_di = pd.Series(plus_dm).ewm(alpha=alpha, adjust=False).mean().iloc[-1] / atr * 100
+        minus_di = pd.Series(minus_dm).ewm(alpha=alpha, adjust=False).mean().iloc[-1] / atr * 100
+        
+        # Calculate DX and ADX
+        dx = np.abs(plus_di - minus_di) / (plus_di + minus_di + 1e-10) * 100
+        
+        return float(dx)
+    
+    def _check_momentum_filter(self, bar: pd.Series, bars_df: pd.DataFrame, idx: int, direction: str, or_high: float, or_low: float) -> bool:
+        """Check if breakout has sufficient momentum.
+        
+        🚀 PHASE 2B: Only trade breakouts with strong price velocity
+        
+        Args:
+            bar: Current bar
+            bars_df: Full bars DataFrame
+            idx: Current index
+            direction: 'long' or 'short'
+            or_high: OR high level
+            or_low: OR low level
+            
+        Returns:
+            True if momentum is sufficient, False otherwise
+        """
+        if not self.config.use_momentum_filter:
+            return True
+        
+        # Look back 3 bars to calculate velocity
+        lookback = 3
+        if idx < lookback:
+            return False  # Not enough history
+        
+        recent_bars = bars_df.iloc[max(0, idx-lookback):idx+1]
+        price_start = recent_bars.iloc[0]['close']
+        price_end = bar['close']
+        price_change = abs(price_end - price_start)
+        
+        # Calculate ATR for normalization
+        atr = self._estimate_atr(bars_df, idx)
+        
+        # Velocity = price change per bar in ATR units
+        velocity = (price_change / atr) / lookback
+        
+        if velocity < self.config.min_breakout_velocity:
+            logger.debug(f"❌ Momentum filter: velocity {velocity:.3f} < {self.config.min_breakout_velocity:.3f}")
+            return False
+        
+        logger.debug(f"✅ Momentum filter: velocity {velocity:.3f}")
+        return True
+    
+    def _check_volume_confirmation(self, bar: pd.Series, bars_df: pd.DataFrame, idx: int) -> bool:
+        """Check if breakout has volume confirmation.
+        
+        🚀 PHASE 2B: Require volume spike on breakout
+        
+        Args:
+            bar: Current bar
+            bars_df: Full bars DataFrame
+            idx: Current index
+            
+        Returns:
+            True if volume is sufficient, False otherwise
+        """
+        if not self.config.use_volume_confirmation:
+            return True
+        
+        # Calculate average volume over last 20 bars
+        lookback = 20
+        if idx < lookback:
+            return True  # Not enough history, allow trade
+        
+        recent_volume = bars_df.iloc[max(0, idx-lookback):idx]['volume'].mean()
+        current_volume = bar['volume']
+        
+        if recent_volume == 0:
+            return True  # Avoid division by zero
+        
+        volume_ratio = current_volume / recent_volume
+        
+        if volume_ratio < self.config.min_volume_ratio:
+            logger.debug(f"❌ Volume filter: ratio {volume_ratio:.2f} < {self.config.min_volume_ratio:.2f}")
+            return False
+        
+        logger.debug(f"✅ Volume filter: ratio {volume_ratio:.2f}")
+        return True
+    
+    def _check_trend_alignment(self, bars_df: pd.DataFrame, idx: int, direction: str) -> bool:
+        """Check if price is aligned with broader trend.
+        
+        🚀 PHASE 2B: Only trade with the trend
+        
+        Args:
+            bars_df: Full bars DataFrame
+            idx: Current index
+            direction: 'long' or 'short'
+            
+        Returns:
+            True if trend is aligned, False otherwise
+        """
+        if not self.config.use_trend_alignment:
+            return True
+        
+        # Need enough bars for slow EMA
+        if idx < self.config.slow_ema_period:
+            return True  # Not enough history
+        
+        # Calculate EMAs
+        recent_bars = bars_df.iloc[:idx+1]
+        closes = recent_bars['close']
+        
+        fast_ema = closes.ewm(span=self.config.fast_ema_period, adjust=False).mean().iloc[-1]
+        slow_ema = closes.ewm(span=self.config.slow_ema_period, adjust=False).mean().iloc[-1]
+        
+        # Check alignment
+        if direction == "long":
+            if fast_ema <= slow_ema:
+                logger.debug(f"❌ Trend filter: LONG but fast EMA ({fast_ema:.2f}) <= slow EMA ({slow_ema:.2f})")
+                return False
+        else:  # short
+            if fast_ema >= slow_ema:
+                logger.debug(f"❌ Trend filter: SHORT but fast EMA ({fast_ema:.2f}) >= slow EMA ({slow_ema:.2f})")
+                return False
+        
+        logger.debug(f"✅ Trend filter: {direction.upper()} aligned")
+        return True
+    
+    def _check_price_action_quality(self, bar: pd.Series) -> bool:
+        """Check if price action is clean (no excessive wicks).
+        
+        🚀 PHASE 2B: Avoid choppy, indecisive candles
+        
+        Args:
+            bar: Current bar
+            
+        Returns:
+            True if price action is clean, False otherwise
+        """
+        if not self.config.use_price_action_filter:
+            return True
+        
+        candle_range = abs(bar['high'] - bar['low'])
+        if candle_range == 0:
+            return False  # Doji, skip
+        
+        body_size = abs(bar['close'] - bar['open'])
+        
+        # Calculate wick sizes
+        if bar['close'] > bar['open']:  # Green candle
+            upper_wick = bar['high'] - bar['close']
+            lower_wick = bar['open'] - bar['low']
+        else:  # Red candle
+            upper_wick = bar['high'] - bar['open']
+            lower_wick = bar['close'] - bar['low']
+        
+        max_wick = max(upper_wick, lower_wick)
+        wick_ratio = max_wick / candle_range
+        
+        if wick_ratio > self.config.max_wick_ratio:
+            logger.debug(f"❌ Price action filter: wick ratio {wick_ratio:.2f} > {self.config.max_wick_ratio:.2f}")
+            return False
+        
+        logger.debug(f"✅ Price action filter: clean candle (wick {wick_ratio:.2f})")
+        return True
+    
+    def _check_reentry_cooldown(self, timestamp: pd.Timestamp, direction: str) -> bool:
+        """Check if enough time has passed since last trade in this direction.
+        
+        🚀 PHASE 2B: Prevent overtrading
+        
+        Args:
+            timestamp: Current timestamp
+            direction: 'long' or 'short'
+            
+        Returns:
+            True if cooldown passed, False otherwise
+        """
+        if not self.config.use_reentry_cooldown:
+            return True
+        
+        last_time = self.last_trade_time[direction]
+        if last_time is None:
+            return True  # No previous trade
+        
+        minutes_since = (timestamp - last_time).total_seconds() / 60
+        
+        if minutes_since < self.config.reentry_cooldown_minutes:
+            logger.debug(f"❌ Cooldown: {minutes_since:.1f}min < {self.config.reentry_cooldown_minutes}min since last {direction.upper()}")
+            return False
+        
+        logger.debug(f"✅ Cooldown: {minutes_since:.1f}min passed")
+        return True
+    
     def _is_filtered_time(self, timestamp: pd.Timestamp, or_end_ts: pd.Timestamp) -> bool:
         """Check if current time should be filtered out.
         
@@ -374,13 +647,45 @@ class ORB2Engine:
     
     def _check_for_signals(self, bar: pd.Series, bars_df: pd.DataFrame, idx: int):
         """Check all playbooks for signals."""
+        # 🎯 PHASE 2: Check daily loss limit
+        if self.daily_shutdown:
+            logger.debug(f"Daily shutdown active (hit loss limit), skipping signals")
+            return
+        
         # Get OR state
         dual_or = self.or_builder.state()
+        
+        # 🎯 PHASE 2: Intraday monitor - stop if bleeding by noon
+        if self.config.use_intraday_monitor and dual_or.primary_finalized:
+            current_hour = bar["timestamp_utc"].hour
+            if current_hour >= self.config.intraday_check_hour:
+                if self.daily_r <= self.config.intraday_stop_loss_r:
+                    if not self.daily_shutdown:
+                        self.daily_shutdown = True
+                        logger.warning(
+                            f"🛑 INTRADAY STOP: Down {self.daily_r:.2f}R by {current_hour}:00. "
+                            f"Shutting down for rest of day."
+                        )
+                    return
         
         # ✨ PHASE 1 OPTIMIZATION: Time filters
         if dual_or.primary_finalized and self._is_filtered_time(bar["timestamp_utc"], dual_or.primary_end_ts):
             logger.debug(f"Filtered time period, skipping signals")
             return
+        
+        # 🎯 PHASE 2: OR width filter - skip low volatility days
+        # Using normalized width (width / ATR) - if < 0.4, skip session
+        if self.config.use_or_width_filter and dual_or.primary_finalized:
+            if dual_or.primary_width_norm is not None:
+                min_norm_width = 0.4  # Minimum normalized width (40% of ATR)
+                if dual_or.primary_width_norm < min_norm_width:
+                    logger.info(
+                        f"OR width too low (norm={dual_or.primary_width_norm:.2f} < "
+                        f"{min_norm_width:.2f}), skipping low volatility session"
+                    )
+                    # Set shutdown flag to avoid checking every bar
+                    self.daily_shutdown = True
+                    return
         
         # Compute auction metrics (if not already)
         if not hasattr(self, '_auction_metrics'):
@@ -396,6 +701,25 @@ class ORB2Engine:
                 f"Auction classified: {self._state_classification.state.value} "
                 f"(conf={self._state_classification.confidence:.2f})"
             )
+            
+            # 🎯 PHASE 2: Calculate ADX for regime filter
+            if self.config.use_regime_filter:
+                # Use bars up to current point for ADX
+                bars_so_far = bars_df.iloc[:idx+1]
+                adx = self._calculate_adx(bars_so_far, period=self.config.adx_period)
+                
+                if adx < self.config.adx_trending_threshold:
+                    logger.warning(
+                        f"🌊 CHOPPY REGIME DETECTED: ADX={adx:.1f} < {self.config.adx_trending_threshold:.1f}. "
+                        f"Shutting down for rest of day."
+                    )
+                    self.daily_shutdown = True
+                    return
+                else:
+                    logger.info(f"✅ TRENDING REGIME: ADX={adx:.1f}")
+            
+            # Cache ADX for later use
+            self._session_adx = adx if self.config.use_regime_filter else None
         
         # Build context
         context = self._build_context(bar, dual_or, bars_df, idx)
@@ -433,8 +757,40 @@ class ORB2Engine:
                 else:
                     gated = None
                 
+                # 🚀 PHASE 2B: ENTRY QUALITY FILTERS
+                # Check cooldown
+                if not self._check_reentry_cooldown(bar["timestamp_utc"], signal.direction):
+                    logger.debug(f"Signal rejected: cooldown not passed")
+                    continue
+                
+                # Check momentum
+                if not self._check_momentum_filter(bar, bars_df, idx, signal.direction, dual_or.primary_high, dual_or.primary_low):
+                    logger.debug(f"Signal rejected: insufficient momentum")
+                    continue
+                
+                # Check volume
+                if not self._check_volume_confirmation(bar, bars_df, idx):
+                    logger.debug(f"Signal rejected: insufficient volume")
+                    continue
+                
+                # Check trend alignment
+                if not self._check_trend_alignment(bars_df, idx, signal.direction):
+                    logger.debug(f"Signal rejected: trend not aligned")
+                    continue
+                
+                # Check price action quality
+                if not self._check_price_action_quality(bar):
+                    logger.debug(f"Signal rejected: poor price action")
+                    continue
+                
+                logger.info(f"✅ Signal passed ALL quality filters: {signal.direction.upper()} @ {signal.entry_price:.2f}")
+                
                 # Create trade
                 self._create_trade(signal, dual_or, gated)
+                
+                # Update last trade time
+                self.last_trade_time[signal.direction] = bar["timestamp_utc"]
+                
                 break  # Only one trade at a time
     
     def _build_context(
@@ -706,13 +1062,22 @@ class ORB2Engine:
         self.completed_trades.append(trade)
         self.cumulative_r += realized_r
         
+        # 🎯 PHASE 2: Update daily P&L and check loss limit
+        self.daily_r += realized_r
+        if self.config.use_daily_loss_limit and self.daily_r <= self.config.daily_loss_limit_r:
+            self.daily_shutdown = True
+            logger.warning(
+                f"🚨 DAILY LOSS LIMIT HIT: {self.daily_r:.2f}R / {self.config.daily_loss_limit_r:.2f}R limit. "
+                f"Shutting down for rest of day."
+            )
+        
         # Remove from active
         del self.active_trades[trade_id]
         
         logger.info(
             f"Trade closed: {trade_id} {reason}, "
             f"R={realized_r:.2f}, MFE={analysis.mfe_r:.2f}, MAE={analysis.mae_r:.2f}, "
-            f"cumulative={self.cumulative_r:.2f}R"
+            f"daily={self.daily_r:.2f}R, cumulative={self.cumulative_r:.2f}R"
         )
     
     def _finalize_session(self):
