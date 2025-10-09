@@ -106,6 +106,7 @@ class IBFadePlaybook(Playbook):
         regime: str,
         features: Dict[str, float],
         open_positions: List[Any],
+        mbp10_snapshot: Optional[Dict] = None,
     ) -> Optional[Signal]:
         """Check if IB Fade entry conditions are met.
         

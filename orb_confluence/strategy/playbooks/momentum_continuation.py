@@ -108,6 +108,7 @@ class MomentumContinuationPlaybook(Playbook):
         regime: str,
         features: Dict[str, float],
         open_positions: List[Any],
+        mbp10_snapshot: Optional[Dict] = None,
     ) -> Optional[Signal]:
         """Check if Momentum Continuation entry conditions are met.
         

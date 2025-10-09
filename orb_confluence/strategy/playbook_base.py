@@ -255,6 +255,7 @@ class Playbook(ABC):
         regime: str,
         features: Dict[str, float],
         open_positions: List[Any],
+        mbp10_snapshot: Optional[Dict] = None,
     ) -> Optional[Signal]:
         """Check if entry conditions are met.
         
@@ -264,6 +265,7 @@ class Playbook(ABC):
             regime: Current market regime
             features: Current feature values
             open_positions: List of currently open positions
+            mbp10_snapshot: MBP-10 order book snapshot (optional)
             
         Returns:
             Signal if conditions met, None otherwise

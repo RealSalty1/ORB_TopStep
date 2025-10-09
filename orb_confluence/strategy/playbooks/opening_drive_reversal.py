@@ -114,6 +114,7 @@ class OpeningDriveReversalPlaybook(Playbook):
         regime: str,
         features: Dict[str, float],
         open_positions: List[Any],
+        mbp10_snapshot: Optional[Dict] = None,
     ) -> Optional[Signal]:
         """Check if Opening Drive Reversal entry conditions are met.
         
@@ -411,6 +412,59 @@ class OpeningDriveReversalPlaybook(Playbook):
             extreme = opening_bars['high'].max()
         else:
             direction = Direction.LONG  # Fade downward drive
+
+        # ===================================================================
+        # MBP-10 ORDER FLOW FILTERS (Week 2 Enhancement)
+        # ===================================================================
+        if mbp10_snapshot is not None:
+            from orb_confluence.features.order_book_features import OrderBookFeatures
+            ob_features = OrderBookFeatures()
+            
+            # Calculate OFI (Order Flow Imbalance)
+            ofi = ob_features.order_flow_imbalance(mbp10_snapshot)
+            
+            # Calculate Depth Imbalance
+            depth_imb = ob_features.depth_imbalance(mbp10_snapshot)
+            
+            # FILTER 1: OFI Confirmation
+            # Require order flow to support direction
+            if direction == Direction.LONG:
+                if ofi < 0.3:  # Not enough buying pressure
+                    logger.debug(
+                        f"{self.name}: LONG rejected - insufficient buy flow "
+                        f"(OFI={ofi:.3f} < 0.3)"
+                    )
+                    return None
+            else:  # SHORT
+                if ofi > -0.3:  # Not enough selling pressure
+                    logger.debug(
+                        f"{self.name}: SHORT rejected - insufficient sell flow "
+                        f"(OFI={ofi:.3f} > -0.3)"
+                    )
+                    return None
+            
+            # FILTER 2: Depth Imbalance Confirmation
+            # Require book depth to support direction
+            if direction == Direction.LONG:
+                if depth_imb < 0.2:  # Not enough bid support
+                    logger.debug(
+                        f"{self.name}: LONG rejected - insufficient depth support "
+                        f"(depth={depth_imb:.3f} < 0.2)"
+                    )
+                    return None
+            else:  # SHORT
+                if depth_imb > -0.2:  # Not enough ask pressure
+                    logger.debug(
+                        f"{self.name}: SHORT rejected - insufficient depth pressure "
+                        f"(depth={depth_imb:.3f} > -0.2)"
+                    )
+                    return None
+            
+            logger.info(
+                f"{self.name}: {direction.value} entry CONFIRMED by order flow "
+                f"(OFI={ofi:.3f}, Depth={depth_imb:.3f})"
+            )
+        # ===================================================================
             extreme = opening_bars['low'].min()
         
         return (direction, drive_range, extreme)

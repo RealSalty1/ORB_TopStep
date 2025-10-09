@@ -99,6 +99,7 @@ class VWAPMagnetPlaybook(Playbook):
         regime: str,
         features: Dict[str, float],
         open_positions: List[Any],
+        mbp10_snapshot: Optional[Dict] = None,
     ) -> Optional[Signal]:
         """Check if VWAP Magnet entry conditions are met.
         
@@ -108,6 +109,7 @@ class VWAPMagnetPlaybook(Playbook):
         3. High rejection velocity detected
         4. Not in chop (check rotation entropy)
         5. Regime alignment
+        6. **NEW:** MBP-10 order flow confirmation (OFI + depth imbalance)
         
         Args:
             bars: Historical bars
@@ -115,6 +117,7 @@ class VWAPMagnetPlaybook(Playbook):
             regime: Current regime
             features: Current feature values
             open_positions: Currently open positions
+            mbp10_snapshot: MBP-10 order book snapshot (for institutional filters)
             
         Returns:
             Signal if conditions met, None otherwise
@@ -153,6 +156,59 @@ class VWAPMagnetPlaybook(Playbook):
         else:
             direction = Direction.LONG  # Fade the downside extension
             extension_distance = vwap - current_price
+        
+        # ===================================================================
+        # MBP-10 ORDER FLOW FILTERS (Week 2 Enhancement)
+        # ===================================================================
+        if mbp10_snapshot is not None:
+            from orb_confluence.features.order_book_features import OrderBookFeatures
+            ob_features = OrderBookFeatures()
+            
+            # Calculate OFI (Order Flow Imbalance)
+            ofi = ob_features.order_flow_imbalance(mbp10_snapshot)
+            
+            # Calculate Depth Imbalance
+            depth_imb = ob_features.depth_imbalance(mbp10_snapshot)
+            
+            # FILTER 1: OFI Confirmation
+            # Require order flow to support direction
+            if direction == Direction.LONG:
+                if ofi < 0.3:  # Not enough buying pressure
+                    logger.debug(
+                        f"VWAP Magnet: LONG rejected - insufficient buy flow "
+                        f"(OFI={ofi:.3f} < 0.3)"
+                    )
+                    return None
+            else:  # SHORT
+                if ofi > -0.3:  # Not enough selling pressure
+                    logger.debug(
+                        f"VWAP Magnet: SHORT rejected - insufficient sell flow "
+                        f"(OFI={ofi:.3f} > -0.3)"
+                    )
+                    return None
+            
+            # FILTER 2: Depth Imbalance Confirmation
+            # Require book depth to support direction
+            if direction == Direction.LONG:
+                if depth_imb < 0.2:  # Not enough bid support
+                    logger.debug(
+                        f"VWAP Magnet: LONG rejected - insufficient depth support "
+                        f"(depth={depth_imb:.3f} < 0.2)"
+                    )
+                    return None
+            else:  # SHORT
+                if depth_imb > -0.2:  # Not enough ask pressure
+                    logger.debug(
+                        f"VWAP Magnet: SHORT rejected - insufficient depth pressure "
+                        f"(depth={depth_imb:.3f} > -0.2)"
+                    )
+                    return None
+            
+            logger.info(
+                f"VWAP Magnet: {direction.value} entry CONFIRMED by order flow "
+                f"(OFI={ofi:.3f}, Depth={depth_imb:.3f})"
+            )
+        # ===================================================================
         
         # Calculate rejection velocity
         rejection_velocity = self._calculate_rejection_velocity(
