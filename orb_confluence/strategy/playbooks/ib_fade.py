@@ -45,11 +45,11 @@ class IBFadePlaybook(Playbook):
     
     def __init__(
         self,
-        ib_minutes: int = 60,
-        extension_threshold: float = 1.5,
-        min_extension_ticks: int = 8,
-        max_aer: float = 0.65,
-        min_acceptance_bars: int = 3,
+        ib_minutes: int = 30,  # Reduced from 60 to allow earlier entries
+        extension_threshold: float = 1.3,  # Reduced from 1.5 for more signals
+        min_extension_ticks: int = 6,  # Reduced from 8
+        max_aer: float = 0.70,  # Increased from 0.65 to allow more
+        min_acceptance_bars: int = 2,  # Reduced from 3
         stop_buffer_r: float = 0.2,
     ):
         """Initialize IB Fade playbook.
@@ -92,7 +92,9 @@ class IBFadePlaybook(Playbook):
     @property
     def preferred_regimes(self) -> List[str]:
         """Preferred market regimes."""
-        return ["RANGE", "VOLATILE"]
+        # IB Fade works well in range-bound and volatile markets
+        # Also acceptable in TRANSITIONAL (choppy) markets
+        return ["RANGE", "VOLATILE", "TRANSITIONAL"]
     
     @property
     def playbook_type(self) -> str:
@@ -127,37 +129,59 @@ class IBFadePlaybook(Playbook):
         Returns:
             Signal if conditions met, None otherwise
         """
+        # DIAGNOSTIC: Track why signals fail
+        diagnostic = {"playbook": "IB_Fade", "bars_count": len(bars)}
+        
         # Check if already in a position from this playbook
         if self._has_open_position(open_positions):
+            diagnostic["blocked_by"] = "already_in_position"
+            logger.debug(f"IB Fade Diagnostic: {diagnostic}")
             return None
         
         # Calculate IB if not cached
         ib = self._calculate_initial_balance(bars)
         if ib is None:
+            diagnostic["blocked_by"] = "insufficient_data_for_IB"
+            diagnostic["ib_minutes"] = self.config['ib_minutes']
+            logger.info(f"IB Fade Diagnostic: {diagnostic}")
             return None
+        
+        diagnostic["ib_range"] = ib['range']
         
         # Check for extension
         extension = self._detect_extension(bars, current_bar, ib)
         if extension is None:
+            diagnostic["blocked_by"] = "no_extension_detected"
+            logger.info(f"IB Fade Diagnostic: {diagnostic}")
             return None
         
         direction, extension_price, extension_range = extension
+        diagnostic["direction"] = direction.value
+        diagnostic["extension_range"] = extension_range
         
         # Calculate Auction Efficiency Ratio
         aer = self._calculate_aer(bars, ib, extension_price, direction)
+        diagnostic["aer"] = aer if aer else "None"
         if aer is None or aer > self.config['max_aer']:
-            logger.debug(f"IB Fade: AER too high ({aer:.3f} > {self.config['max_aer']})")
+            diagnostic["blocked_by"] = "aer_too_high"
+            diagnostic["max_aer"] = self.config['max_aer']
+            logger.info(f"IB Fade Diagnostic: {diagnostic}")
             return None
         
         # Check for acceptance (price moving back toward IB)
         has_acceptance = self._check_acceptance(bars, current_bar, extension_price, direction)
         if not has_acceptance:
+            diagnostic["blocked_by"] = "no_acceptance"
+            logger.info(f"IB Fade Diagnostic: {diagnostic}")
             return None
         
         # Check regime alignment
         regime_alignment = self.get_regime_alignment(regime)
+        diagnostic["regime"] = regime
+        diagnostic["regime_alignment"] = regime_alignment
         if regime_alignment < 0.5:
-            logger.debug(f"IB Fade: Poor regime alignment ({regime}) - skipping")
+            diagnostic["blocked_by"] = "poor_regime_alignment"
+            logger.info(f"IB Fade Diagnostic: {diagnostic}")
             return None
         
         # Calculate entry, stop, and targets

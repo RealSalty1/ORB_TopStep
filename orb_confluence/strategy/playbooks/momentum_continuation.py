@@ -47,12 +47,12 @@ class MomentumContinuationPlaybook(Playbook):
     
     def __init__(
         self,
-        min_iqf: float = 1.8,
-        pullback_min: float = 0.382,
-        pullback_max: float = 0.618,
+        min_iqf: float = 1.0,  # Reduced from 1.4 (most impulses are 0.5-1.2)
+        pullback_min: float = 0.25,  # Reduced from 0.30 for more flexibility
+        pullback_max: float = 0.75,  # Increased from 0.70
         min_impulse_bars: int = 5,
         max_impulse_bars: int = 30,
-        min_directional_commitment: float = 0.60,
+        min_directional_commitment: float = 0.40,  # Reduced from 0.50
         stop_buffer_r: float = 0.15,
     ):
         """Initialize Momentum Continuation playbook.
@@ -94,7 +94,10 @@ class MomentumContinuationPlaybook(Playbook):
     @property
     def preferred_regimes(self) -> List[str]:
         """Preferred market regimes."""
-        return ["TREND"]
+        # Momentum works best in trending markets
+        # Also acceptable in VOLATILE markets with strong directional moves
+        # Even in TRANSITIONAL markets, can catch mini-trends
+        return ["TREND", "VOLATILE", "TRANSITIONAL"]
     
     @property
     def playbook_type(self) -> str:
@@ -131,25 +134,40 @@ class MomentumContinuationPlaybook(Playbook):
         Returns:
             Signal if conditions met, None otherwise
         """
+        # DIAGNOSTIC: Track why signals fail
+        diagnostic = {"playbook": "Momentum", "bars_count": len(bars)}
+        
         # Check if already in position
         if self._has_open_position(open_positions):
+            diagnostic["blocked_by"] = "already_in_position"
+            logger.debug(f"Momentum Diagnostic: {diagnostic}")
             return None
         
-        # Need sufficient bars for impulse detection
-        if len(bars) < 50:
+        # Need sufficient bars for impulse detection (reduced from 50 to 30)
+        if len(bars) < 30:
+            diagnostic["blocked_by"] = "insufficient_bars"
+            diagnostic["min_required"] = 30
+            logger.debug(f"Momentum Diagnostic: {diagnostic}")
             return None
         
         # Step 1: Detect impulse
         impulse = self._detect_impulse(bars)
         if impulse is None:
+            diagnostic["blocked_by"] = "no_impulse_detected"
+            logger.info(f"Momentum Diagnostic: {diagnostic}")
             return None
         
         direction, impulse_start, impulse_end, impulse_range = impulse
+        diagnostic["direction"] = direction.value
+        diagnostic["impulse_range"] = impulse_range
         
         # Step 2: Calculate IQF
         iqf = self._calculate_iqf(bars, impulse_start, impulse_end, impulse_range)
+        diagnostic["iqf"] = iqf if iqf else "None"
         if iqf is None or iqf < self.config['min_iqf']:
-            logger.debug(f"Momentum: IQF too low ({iqf:.2f} < {self.config['min_iqf']})")
+            diagnostic["blocked_by"] = "low_iqf"
+            diagnostic["min_required"] = self.config['min_iqf']
+            logger.info(f"Momentum Diagnostic: {diagnostic}")
             return None
         
         # Step 3: Detect pullback to structure
@@ -157,32 +175,41 @@ class MomentumContinuationPlaybook(Playbook):
             bars, current_bar, impulse_start, impulse_end, impulse_range, direction
         )
         if pullback_data is None:
+            diagnostic["blocked_by"] = "no_pullback_detected"
+            logger.info(f"Momentum Diagnostic: {diagnostic}")
             return None
         
         pullback_pct, pullback_low, structure_level = pullback_data
+        diagnostic["pullback_pct"] = pullback_pct
         
         # Step 4: Check directional commitment still strong
         directional_commitment = features.get('directional_commitment', 0.5)
+        diagnostic["directional_commitment"] = directional_commitment
         if directional_commitment < self.config['min_directional_commitment']:
-            logger.debug(
-                f"Momentum: Low directional commitment "
-                f"({directional_commitment:.2f} < {self.config['min_directional_commitment']})"
-            )
+            diagnostic["blocked_by"] = "low_directional_commitment"
+            diagnostic["min_required"] = self.config['min_directional_commitment']
+            logger.info(f"Momentum Diagnostic: {diagnostic}")
             return None
         
         # Step 5: Check microstructure pressure aligns
         microstructure_pressure = features.get('microstructure_pressure', 0.0)
+        diagnostic["microstructure_pressure"] = microstructure_pressure
         if direction == Direction.LONG and microstructure_pressure < -0.1:
-            logger.debug("Momentum: Microstructure shows selling pressure (LONG setup)")
+            diagnostic["blocked_by"] = "microstructure_misaligned"
+            logger.info(f"Momentum Diagnostic: {diagnostic}")
             return None
         if direction == Direction.SHORT and microstructure_pressure > 0.1:
-            logger.debug("Momentum: Microstructure shows buying pressure (SHORT setup)")
+            diagnostic["blocked_by"] = "microstructure_misaligned"
+            logger.info(f"Momentum Diagnostic: {diagnostic}")
             return None
         
-        # Step 6: Check regime
+        # Step 6: Check regime (loosened from 0.8 to 0.7)
         regime_alignment = self.get_regime_alignment(regime)
-        if regime_alignment < 0.8:  # Strict for momentum
-            logger.debug(f"Momentum: Poor regime alignment ({regime})")
+        diagnostic["regime"] = regime
+        diagnostic["regime_alignment"] = regime_alignment
+        if regime_alignment < 0.7:  # Loosened for more signals
+            diagnostic["blocked_by"] = "poor_regime_alignment"
+            logger.info(f"Momentum Diagnostic: {diagnostic}")
             return None
         
         # Calculate entry, stop, targets
